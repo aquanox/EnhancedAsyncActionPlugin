@@ -18,8 +18,10 @@ class UE_API FEnhancedAsyncActionContextStub : public FEnhancedAsyncActionContex
 public:
 	virtual FString GetDebugName() const { return TEXT("FEnhancedAsyncActionContextStub"); }
 	virtual bool IsValid() const override { return true; }
+
+	static void HandleStubCall();
 	
-#define CONTEXT_PROPERTY_ACCESSOR_MODE override { }
+#define CONTEXT_PROPERTY_ACCESSOR_MODE override { HandleStubCall(); }
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Bool, bool)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Byte, uint8)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Int32, int32)
@@ -29,14 +31,13 @@ public:
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(String, FString)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Name, FName)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Text, FText)
-	CONTEXT_DECLARE_OBJECT_ACCESSOR(Object, UObject*)
-	CONTEXT_DECLARE_CLASS_ACCESSOR(Class, UClass*)
 	CONTEXT_DECLARE_ENUM_ACCESSOR(Enum)
 	CONTEXT_DECLARE_STRUCT_ACCESSOR(Struct)
+	CONTEXT_DECLARE_OBJECT_ACCESSOR(Object)
+	CONTEXT_DECLARE_CLASS_ACCESSOR(Class)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Array)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
-	
 };
 
 /**
@@ -67,10 +68,10 @@ public:
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(String, FString)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Name, FName)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Text, FText)
-	CONTEXT_DECLARE_OBJECT_ACCESSOR(Object, UObject*)
-	CONTEXT_DECLARE_CLASS_ACCESSOR(Class, UClass*)
 	CONTEXT_DECLARE_ENUM_ACCESSOR(Enum)
 	CONTEXT_DECLARE_STRUCT_ACCESSOR(Struct)
+	CONTEXT_DECLARE_OBJECT_ACCESSOR(Object)
+	CONTEXT_DECLARE_CLASS_ACCESSOR(Class)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Array)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
@@ -98,8 +99,6 @@ public:
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 protected:
 	TWeakObjectPtr<const UObject> OwnerRef;
-	// this is intended to be raw pointer
-	// const UObject* OwnerRefValidateReinstancing = nullptr;
 };
 
 /**

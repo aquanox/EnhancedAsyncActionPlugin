@@ -160,6 +160,7 @@ Context created only if there is at least one capture pin connected.
 - Write some tests
 - Latent functions support
 - Maps support (has to wait for UE 5.8)
+- Improve error handling
 - Experiment with direct container access (make a FInstancedPropertyBag member required, since condition already requires editing and StructUtils part of UE Core)
 - Experiment with optimizing generated graph nodes
 - Better handling of malformed or changed nodes (there are lots of debug asserts right now)

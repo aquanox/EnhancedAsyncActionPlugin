@@ -143,6 +143,13 @@ bool FEnhancedAsyncActionContext_PropertyBagBase::CanAddNewProperty(const FName&
 	return !ValueConfigured || !GetValueRef()->FindPropertyDescByName(Name);
 }
 
+void FEnhancedAsyncActionContextStub::HandleStubCall()
+{
+#if (defined(EAA_DEBUG) && EAA_DEBUG == 1) //||  1
+	ensureAlwaysMsgf(false, TEXT("Must not be called"));
+#endif
+}
+
 bool FEnhancedAsyncActionContext_PropertyBagBase::IsValid() const
 {
 	return GetValueRef()->IsValid();
@@ -238,26 +245,6 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetValueText(int32 Index, cons
 	VALIDATE_RESULT(GetValueRef()->SetValueText(Name, InValue));
 }
 
-void FEnhancedAsyncActionContext_PropertyBagBase::SetValueObject(int32 Index, UClass* ExpectedClass, UObject* const& InValue)
-{
-	const FName Name = EAA::Internals::IndexToName(Index);
-	if (CanAddNewProperty(Name, EPropertyBagPropertyType::Object))
-	{
-		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Object, ExpectedClass);
-	}
-	VALIDATE_RESULT(GetValueRef()->SetValueObject(Name, InValue));
-}
-
-void FEnhancedAsyncActionContext_PropertyBagBase::SetValueClass(int32 Index, UClass* ExpectedMetaClass, UClass* const& InValue)
-{
-	const FName Name = EAA::Internals::IndexToName(Index);
-	if (CanAddNewProperty(Name, EPropertyBagPropertyType::Class))
-	{
-		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Class, ExpectedMetaClass);
-	}
-	VALIDATE_RESULT(GetValueRef()->SetValueClass(Name, InValue));
-}
-
 void FEnhancedAsyncActionContext_PropertyBagBase::SetValueEnum(int32 Index, UEnum* ExpectedType, uint8 InValue)
 {
 	const FName Name = EAA::Internals::IndexToName(Index);
@@ -278,10 +265,54 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetValueStruct(int32 Index, US
 	VALIDATE_RESULT(GetValueRef()->SetValueStruct(Name, FConstStructView(ExpectedType, InValue)));
 }
 
+void FEnhancedAsyncActionContext_PropertyBagBase::SetValueObject(int32 Index, UClass* ExpectedClass, UObject* const& InValue)
+{
+	const FName Name = EAA::Internals::IndexToName(Index);
+	if (CanAddNewProperty(Name, EPropertyBagPropertyType::Object))
+	{
+		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Object, ExpectedClass);
+	}
+	VALIDATE_RESULT(GetValueRef()->SetValueObject(Name, InValue));
+}
+
+void FEnhancedAsyncActionContext_PropertyBagBase::SetValueSoftObject(int32 Index, UClass* ExpectedClass, TSoftObjectPtr<UObject> const& InValue)
+{
+	const FName Name = EAA::Internals::IndexToName(Index);
+	if (CanAddNewProperty(Name, EPropertyBagPropertyType::SoftObject))
+	{
+		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::SoftObject, ExpectedClass);
+	}
+	VALIDATE_RESULT(GetValueRef()->SetValueSoftPath(Name, InValue.ToSoftObjectPath()));
+}
+
+void FEnhancedAsyncActionContext_PropertyBagBase::SetValueClass(int32 Index, UClass* ExpectedMetaClass, UClass* const& InValue)
+{
+	const FName Name = EAA::Internals::IndexToName(Index);
+	if (CanAddNewProperty(Name, EPropertyBagPropertyType::Class))
+	{
+		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Class, ExpectedMetaClass);
+	}
+	VALIDATE_RESULT(GetValueRef()->SetValueClass(Name, InValue));
+}
+
+void FEnhancedAsyncActionContext_PropertyBagBase::SetValueSoftClass(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject> const& InValue)
+{
+	const FName Name = EAA::Internals::IndexToName(Index);
+	if (CanAddNewProperty(Name, EPropertyBagPropertyType::SoftClass))
+	{
+		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::SoftClass, ExpectedMetaClass);
+	}
+	VALIDATE_RESULT(GetValueRef()->SetValueSoftPath(Name, InValue.ToSoftObjectPath()));
+}
+
+// ===============================================
+// 
+// ===============================================
+
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueBool(int32 Index, bool& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueBool(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -290,7 +321,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueBool(int32 Index, bool
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueByte(int32 Index, uint8& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueByte(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -299,7 +330,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueByte(int32 Index, uint
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueInt32(int32 Index, int32& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueInt32(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -308,7 +339,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueInt32(int32 Index, int
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueInt64(int32 Index, int64& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueInt64(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -317,7 +348,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueInt64(int32 Index, int
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueFloat(int32 Index, float& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueFloat(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -326,7 +357,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueFloat(int32 Index, flo
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueDouble(int32 Index, double& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueDouble(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -335,7 +366,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueDouble(int32 Index, do
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueName(int32 Index, FName& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueName(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -344,7 +375,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueName(int32 Index, FNam
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueString(int32 Index, FString& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueString(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -353,35 +384,9 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueString(int32 Index, FS
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueText(int32 Index, FText& OutValue)
 {
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueText(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
-	}
-}
-
-void FEnhancedAsyncActionContext_PropertyBagBase::GetValueObject(int32 Index, UClass* ExpectedClass, UObject*& OutValue)
-{
-	OutValue = nullptr;
-	
-	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueObject(EAA::Internals::IndexToName(Index), ExpectedClass));
-	if (Value.HasValue() && !Value.HasError())
-	{
-		OutValue = Value.GetValue();
-	}
-}
-
-void FEnhancedAsyncActionContext_PropertyBagBase::GetValueClass(int32 Index, UClass* ExpectedMetaClass, UClass*& OutValue)
-{
-	OutValue = nullptr;
-	
-	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueClass(EAA::Internals::IndexToName(Index)));
-	if (Value.HasValue() && !Value.HasError())
-	{
-		OutValue = Value.GetValue();
-		if (ExpectedMetaClass && OutValue && !OutValue->IsChildOf(ExpectedMetaClass))
-		{
-			OutValue = nullptr;
-		}
 	}
 }
 
@@ -390,7 +395,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueEnum(int32 Index, UEnu
 	OutValue = 0;
 	
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueEnum(EAA::Internals::IndexToName(Index), ExpectedType));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue();
 	}
@@ -401,13 +406,59 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueStruct(int32 Index, US
 	OutValue = nullptr;
 	
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueStruct(EAA::Internals::IndexToName(Index), ExpectedType));
-	if (Value.HasValue() && !Value.HasError())
+	if (Value.HasValue())
 	{
 		OutValue = Value.GetValue().GetMemory();
 	}
 }
 
-// ============ CONTAINERS =============
+void FEnhancedAsyncActionContext_PropertyBagBase::GetValueObject(int32 Index, UClass* ExpectedClass, UObject*& OutValue)
+{
+	OutValue = nullptr;
+	
+	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueObject(EAA::Internals::IndexToName(Index), ExpectedClass));
+	if (Value.HasValue())
+	{
+		OutValue = Value.GetValue();
+	}
+}
+
+void FEnhancedAsyncActionContext_PropertyBagBase::GetValueClass(int32 Index, UClass* ExpectedMetaClass, UClass*& OutValue)
+{
+	OutValue = nullptr;
+	
+	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueClass(EAA::Internals::IndexToName(Index)));
+	if (Value.HasValue())
+	{
+		OutValue = Value.GetValue();
+	}
+}
+
+void FEnhancedAsyncActionContext_PropertyBagBase::GetValueSoftObject(int32 Index, UClass* ExpectedClass, TSoftObjectPtr<UObject>& OutValue)
+{
+	OutValue = nullptr;
+	
+	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueSoftPath(EAA::Internals::IndexToName(Index)));
+	if (Value.HasValue())
+	{
+		OutValue = Value.GetValue();
+	}
+}
+
+void FEnhancedAsyncActionContext_PropertyBagBase::GetValueSoftClass(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject>& OutValue)
+{
+	OutValue = nullptr;
+	
+	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueSoftPath(EAA::Internals::IndexToName(Index)));
+	if (Value.HasValue())
+	{
+		OutValue = Value.GetValue();
+	}
+}
+
+// ======================================
+// ============ CONTAINERS ==============
+// ======================================
 
 void FEnhancedAsyncActionContext_PropertyBagBase::GetArrayRefForWrite(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, void*&Value)
 {
@@ -465,11 +516,7 @@ FEnhancedAsyncActionContext_PropertyBagRef::FEnhancedAsyncActionContext_Property
 
 bool FEnhancedAsyncActionContext_PropertyBagRef::IsValid() const
 {
-	// Validate that owner is still alive
-	// Validate that object was not affected by reinstancing
-	return OwnerRef.IsValid()
-		// && ensureAlways(OwnerRef.Get() == OwnerRefValidateReinstancing)
-		&& Super::IsValid();
+	return OwnerRef.IsValid() && Super::IsValid();
 }
 
 void FEnhancedAsyncActionContext_PropertyBagRef::AddReferencedObjects(FReferenceCollector& Collector)

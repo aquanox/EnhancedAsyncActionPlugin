@@ -71,8 +71,8 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 			CASE_SELECT(Struct, Handle_SetValue_Struct, Handle_GetValue_Struct);
 			CASE_SELECT(Object, Handle_SetValue_Object, Handle_GetValue_Object);
 			CASE_SELECT(Class, Handle_SetValue_Class, Handle_GetValue_Class);
-			// CASE_SELECT(SoftObject, Handle_SetValue_Struct, Handle_GetValue_Struct);
-			// CASE_SELECT(SoftClass, Handle_SetValue_Struct, Handle_GetValue_Struct);
+			CASE_SELECT(SoftObject, Handle_SetValue_SoftObject, Handle_GetValue_SoftObject);
+			CASE_SELECT(SoftClass, Handle_SetValue_SoftClass, Handle_GetValue_SoftClass);
 			// CASE_SELECT(UInt32, Handle_SetValue_Int32, Handle_GetValue_Int32);
 			// CASE_SELECT(UInt64, Handle_SetValue_Int64, Handle_GetValue_Int64);
 		default:

@@ -13,6 +13,19 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedAsyncActionContextLibrary)
 
+#define EAA_KISMET_ARRAY_ENSURE(Expr) \
+	if (!ensureAlways(Expr))  { \
+		Stack.bArrayContextFailed = true;  \
+		return;  \
+	}
+
+#define EAA_KISMET_ENSURE(Expr, Message) \
+	if (!ensureAlways(Expr)) { \
+		FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution,  INVTEXT(Message) );  \
+		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);  \
+		return; \
+	}
+
 FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::CreateContextForObject(const UObject* Action, FName InDataProperty)
 {
 	if (!IsValid(Action))
@@ -177,17 +190,8 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Basic)
 	
 	P_FINISH;
 
-	if (!ValueProp || !ValuePtr)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Set Value Basic")
-		);
+	EAA_KISMET_ENSURE(ValueProp != nullptr && ValuePtr != nullptr, "Failed to resolve the Value Property for Set Value Basic");
 
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
-	
 	P_NATIVE_BEGIN;
 
 	bool bValidCall = false;
@@ -263,15 +267,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Basic)
 		break;
 	}
 
-	if (!bValidCall)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Unsupported property type the Value for Set Value Basic")
-		);
-
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-	}
+	EAA_KISMET_ENSURE(bValidCall, "Unsupported property type the Value for Set Value Basic");
 
 	P_NATIVE_END;
 }
@@ -293,16 +289,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Enum)
 	const FEnumProperty* ParamValueProp = CastField<FEnumProperty>(Stack.MostRecentProperty);
 	P_FINISH;
 
-	if (!ParamValueProp)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Set Value Enum")
-		);
-
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Enum");
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
@@ -328,16 +315,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Struct)
 	const void* ParamValue = Stack.MostRecentPropertyAddress;
 	P_FINISH;
 	
-	if (!ParamValueProp || !ParamValue)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Set Value Struct")
-		);
-
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr && ParamValue != nullptr, "Failed to resolve the Value Property for Set Value Struct");
 	
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
@@ -358,20 +336,32 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Object)
 	const FObjectProperty* ParamValueProp = CastField<FObjectProperty>(Stack.MostRecentProperty);
 	P_FINISH;
 
-	if (!ParamValueProp)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Set Value Object")
-		);
-
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Object");
 	
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->SetValueObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
+	P_NATIVE_END;
+}
+
+void UEnhancedAsyncActionContextLibrary::Handle_SetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject> Value)
+{
+	checkNoEntry();
+}
+
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftObject)
+{
+	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+	P_GET_PROPERTY(FIntProperty,ParamIndex);
+	P_GET_SOFTOBJECT(TSoftObjectPtr<UObject>,ParamValue);
+	const FSoftObjectProperty* ParamValueProp = CastField<FSoftObjectProperty>(Stack.MostRecentProperty);
+	P_FINISH;
+
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Soft Object");
+	
+	P_NATIVE_BEGIN;
+	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	ContextSafe->SetValueSoftObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
 	P_NATIVE_END;
 }
 
@@ -388,20 +378,32 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Class)
 	const FClassProperty* ParamValueProp = CastField<FClassProperty>(Stack.MostRecentProperty);
 	P_FINISH;
 
-	if (!ParamValueProp)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Set Value Class")
-		);
-
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Class");
 	
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->SetValueClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
+	P_NATIVE_END;
+}
+
+void UEnhancedAsyncActionContextLibrary::Handle_SetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject> Value)
+{
+	checkNoEntry();
+}
+
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftClass)
+{
+	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_PROPERTY(FIntProperty,ParamIndex);
+	P_GET_SOFTCLASS(TSoftClassPtr<UObject> ,ParamValue);
+	const FSoftClassProperty* ParamValueProp = CastField<FSoftClassProperty>(Stack.MostRecentProperty);
+	P_FINISH;
+	
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Class");
+	
+	P_NATIVE_BEGIN;
+	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	ContextSafe->SetValueSoftClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
 	P_NATIVE_END;
 }
 
@@ -421,11 +423,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Array)
 	Stack.StepCompiledIn<FArrayProperty>(NULL);
 	void* SrcArrayAddr = Stack.MostRecentPropertyAddress;
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
-	if (!ArrayProperty)
-	{
-		Stack.bArrayContextFailed = true;
-		return;
-	}
+	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr);
 
 	P_FINISH;
 
@@ -457,11 +455,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
 	Stack.StepCompiledIn<FSetProperty>(NULL);
 	void* SrcSetAddr = Stack.MostRecentPropertyAddress;
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
-	if (!SetProperty)
-	{
-		Stack.bArrayContextFailed = true;
-		return;
-	}
+	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr);
 
 	P_FINISH;
 
@@ -545,16 +539,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Basic)
 	
 	P_FINISH;
 
-	if (!ValueProp || !ValuePtr)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Get Value Basic")
-		);
-
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ValueProp != nullptr && ValuePtr != nullptr, "Failed to resolve the Value Property for Get Value Basic");
 	
 	P_NATIVE_BEGIN;
 
@@ -631,15 +616,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Basic)
 		break;
 	}
 
-	if (!bValidCall)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Unsupported property type the Value for Set Value Basic")
-		);
-
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-	}
+	EAA_KISMET_ENSURE(bValidCall, "Unsupported property type the Value for Set Value Basic");
 
 	P_NATIVE_END;
 }
@@ -661,16 +638,8 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Enum)
 	uint8& ParamValue = Stack.StepCompiledInRef<FEnumProperty, uint8>(&ExecResultTemp);
 	const FEnumProperty* ParamValueProp = CastField<FEnumProperty>(Stack.MostRecentProperty);
 	P_FINISH;
-	
-	if (!ParamValueProp)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Get Value Enum")
-		);
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Enum");
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
@@ -697,15 +666,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Struct)
 	void* ParamValue = Stack.MostRecentPropertyAddress;
 	P_FINISH;
 	
-	if (!ParamValueProp || !ParamValue)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Get Value Struct")
-		);
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr && ParamValue != nullptr, "Unsupported property type the Value for Set Value Struct");
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
@@ -731,19 +692,32 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Object)
 	const FObjectProperty* ParamValueProp = CastField<FObjectProperty>(Stack.MostRecentProperty);
 	P_FINISH;
 	
-	if (!ParamValueProp)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Set Value Object")
-		);
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Object");
 	
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->GetValueObject(ParamIndex, ParamValueProp->PropertyClass, P_ARG_GC_BARRIER(ParamValue));
+	P_NATIVE_END;
+}
+
+void UEnhancedAsyncActionContextLibrary::Handle_GetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject>& Value)
+{
+	checkNoEntry();
+}
+
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftObject)
+{
+	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_PROPERTY(FIntProperty,ParamIndex);
+	P_GET_SOFTOBJECT_REF(TSoftObjectPtr<UObject>,ParamValue);
+	const FSoftObjectProperty* ParamValueProp = CastField<FSoftObjectProperty>(Stack.MostRecentProperty);
+	P_FINISH;
+	
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Get Value Soft Object");
+
+	P_NATIVE_BEGIN;
+	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	ContextSafe->GetValueSoftObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
 	P_NATIVE_END;
 }
 
@@ -760,19 +734,32 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Class)
 	const FClassProperty* ParamValueProp = CastField<FClassProperty>(Stack.MostRecentProperty);
 	P_FINISH;
 	
-	if (!ParamValueProp)
-	{
-		FBlueprintExceptionInfo ExceptionInfo(
-			EBlueprintExceptionType::AbortExecution,
-			INVTEXT("Failed to resolve the Value for Get Value Class")
-		);
-		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
-		return;
-	}
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Class");
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->GetValueClass(ParamIndex, ParamValueProp->MetaClass, P_ARG_GC_BARRIER(ParamValue));
+	P_NATIVE_END;
+}
+
+void UEnhancedAsyncActionContextLibrary::Handle_GetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject>& Value)
+{
+	checkNoEntry();
+}
+
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftClass)
+{
+	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_PROPERTY(FIntProperty,ParamIndex);
+	P_GET_SOFTCLASS_REF(TSoftClassPtr<UObject>,ParamValue);
+	const FSoftClassProperty* ParamValueProp = CastField<FSoftClassProperty>(Stack.MostRecentProperty);
+	P_FINISH;
+	
+	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Get Value Soft Class");
+
+	P_NATIVE_BEGIN;
+	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	ContextSafe->GetValueSoftClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
 	P_NATIVE_END;
 }
 
@@ -792,11 +779,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Array)
 	Stack.StepCompiledIn<FArrayProperty>(nullptr);
 	void* SrcArrayAddr = Stack.MostRecentPropertyAddress;
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
-	if (!ArrayProperty)
-	{
-		Stack.bArrayContextFailed = true;
-		return;
-	}
+	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr);
 
 	P_FINISH;
 
@@ -830,11 +813,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Set)
 	Stack.StepCompiledIn<FSetProperty>(nullptr);
 	void* SrcAddr = Stack.MostRecentPropertyAddress;
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
-	if (!SetProperty)
-	{
-		Stack.bArrayContextFailed = true;
-		return;
-	}
+	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr);
 
 	P_FINISH;
 
@@ -851,3 +830,6 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Set)
 	}
 	P_NATIVE_END;
 }
+
+#undef EAA_KISMET_ARRAY_ENSURE
+#undef EAA_KISMET_ENSURE

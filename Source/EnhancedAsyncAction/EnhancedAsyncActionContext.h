@@ -19,24 +19,26 @@ enum class EPropertyBagPropertyType : uint8;
 	virtual void SetValue ##Name(int32 Index, UEnum* ExpectedType, uint8 InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void GetValue ##Name(int32 Index, UEnum* ExpectedType, uint8& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
-#define CONTEXT_DECLARE_OBJECT_ACCESSOR(Name, Type) \
-	virtual void SetValue ##Name(int32 Index, UClass* ExpectedClass, Type const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-	virtual void GetValue ##Name(int32 Index, UClass* ExpectedClass, Type& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
-// todo object soft ref?
-#define CONTEXT_DECLARE_CLASS_ACCESSOR(Name, Type) \
-	virtual void SetValue ##Name(int32 Index, UClass* ExpectedMetaClass, Type const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-	virtual void GetValue ##Name(int32 Index, UClass* ExpectedMetaClass, Type& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
-// todo class soft ref?
+#define CONTEXT_DECLARE_OBJECT_ACCESSOR(Name) \
+	virtual void SetValue ##Name(int32 Index, UClass* ExpectedClass, UObject* const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValue ##Name(int32 Index, UClass* ExpectedClass, UObject*& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void SetValueSoft##Name(int32 Index, UClass* ExpectedClass, TSoftObjectPtr<UObject> const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValueSoft##Name(int32 Index, UClass* ExpectedClass, TSoftObjectPtr<UObject>& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
+
+#define CONTEXT_DECLARE_CLASS_ACCESSOR(Name) \
+	virtual void SetValue ##Name(int32 Index, UClass* ExpectedMetaClass, UClass* const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValue ##Name(int32 Index, UClass* ExpectedMetaClass, UClass*& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void SetValueSoft ##Name(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject> const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValueSoft ##Name(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject>& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+
 #define CONTEXT_DECLARE_STRUCT_ACCESSOR(Name) \
 	virtual void SetValue ##Name(int32 Index, UScriptStruct* ExpectedType, const uint8* InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void GetValue ##Name(int32 Index, UScriptStruct* ExpectedType, const uint8*& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
-// Note: expose FScriptArrayHelper instead of void?
 #define CONTEXT_DECLARE_CONTAINER_ACCESSOR(Name) \
 	virtual void Get ##Name## RefForWrite(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, void*& PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void Get ##Name## RefForRead(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, const void*& PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
-// Note: expose FScriptSetHelper instead of void?
 #define CONTEXT_DECLARE_SET_ACCESSOR(Name) \
 	virtual void Get ##Name## RefForWrite(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, void*& Accessor) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void Get ##Name## RefForRead(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, const void*& Accessor) CONTEXT_PROPERTY_ACCESSOR_MODE;
@@ -109,12 +111,10 @@ struct UE_API FEnhancedAsyncActionContext
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(String, FString)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Name, FName)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Text, FText)
-	CONTEXT_DECLARE_OBJECT_ACCESSOR(Object, UObject*)
-	// CONTEXT_DECLARE_OBJECT_ACCESSOR(Object, FSoftObjectPath)
-	CONTEXT_DECLARE_CLASS_ACCESSOR(Class, UClass*)
-	// CONTEXT_DECLARE_CLASS_ACCESSOR(Class, FSoftClassPath)
 	CONTEXT_DECLARE_ENUM_ACCESSOR(Enum)
 	CONTEXT_DECLARE_STRUCT_ACCESSOR(Struct)
+	CONTEXT_DECLARE_OBJECT_ACCESSOR(Object)
+	CONTEXT_DECLARE_CLASS_ACCESSOR(Class)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Array)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
