@@ -6,11 +6,14 @@
 #include "EnhancedAsyncActionShared.h"
 
 class UK2Node_EnhancedAsyncTaskBase;
+class UK2Node_CallFunction;
+class UEdGraphSchema_K2;
 
 namespace EAA::Internals
 {
 	FString ToDebugString(const FProperty* Pin);
 	FString ToDebugString(const UEdGraphPin* Pin);
+	FString ToDebugString(const FEdGraphPinType& Type);
 	FString ToDebugString(const UK2Node_EnhancedAsyncTaskBase* Node);
 
 	/**
@@ -69,7 +72,7 @@ namespace EAA::Internals
 	 
 	 * @return shared type or wildcard
 	 */
-	FEdGraphPinType DetectPinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin);
+	FEdGraphPinType DeterminePinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin);
 
 	/**
 	 * Select matching library accessor 

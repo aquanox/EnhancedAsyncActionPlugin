@@ -166,6 +166,8 @@ public:
 		class UK2Node_CallFunction* CallCreateProxyObjectNode, UEdGraphPin*& InOutLastThenPin,
 		const UEdGraphSchema_K2* Schema, UEdGraph* SourceGraph, FKismetCompilerContext& CompilerContext);
 
+	void ConformDynamicOutputPin(const UEdGraphSchema_K2* Schema, UK2Node_CallFunction* Func, UEdGraphPin* Pin, const FEdGraphPinType& VarType);
+	
 	void OrphanCapturePins();
 
 	virtual void ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph) override;

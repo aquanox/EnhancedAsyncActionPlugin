@@ -4,6 +4,7 @@
 #include "Kismet/BlueprintAsyncActionBase.h"
 #include "StructUtils/PropertyBag.h"
 #include "K2Node_EnhancedAsyncTaskBase.h"
+#include "K2Node_CallFunction.h"
 
 FString EAA::Internals::ToDebugString(const FProperty* Pin)
 {
@@ -21,6 +22,18 @@ FString EAA::Internals::ToDebugString(const UEdGraphPin* Pin)
 	Buffer.Append(TEXT("Name=")).Append(Pin->PinName.ToString());
 	Buffer.Append(TEXT(" Category=")).Append(Pin->PinType.PinCategory.ToString());
 	Buffer.Append(TEXT(" SubCategory=")).Append(Pin->PinType.PinSubCategory.ToString());
+	Buffer.Append(TEXT(" Object=")).Append(GetNameSafe(Pin->PinType.PinSubCategoryObject.Get()));
+	Buffer.Append(TEXT("]"));
+	return Buffer.ToString();
+}
+
+FString EAA::Internals::ToDebugString(const FEdGraphPinType& Type)
+{
+	FStringBuilderBase Buffer;
+	Buffer.Append(TEXT("PinType["));
+	Buffer.Append(TEXT(" Category=")).Append(Type.PinCategory.ToString());
+	Buffer.Append(TEXT(" SubCategory=")).Append(Type.PinSubCategory.ToString());
+	Buffer.Append(TEXT(" Object=")).Append(GetNameSafe(Type.PinSubCategoryObject.Get()));
 	Buffer.Append(TEXT("]"));
 	return Buffer.ToString();
 }
@@ -78,10 +91,6 @@ bool EAA::Internals::IsCapturableType(const UEdGraphPin* Pin)
 
 bool EAA::Internals::IsCapturableType(const FEdGraphPinType& Type)
 {
-	if (Type.PinCategory == UEdGraphSchema_K2::PC_Exec)
-		return false;
-	if (Type.PinCategory == UEdGraphSchema_K2::PC_Delegate)
-		return false;
 	if (Type.PinCategory == UEdGraphSchema_K2::PC_Wildcard)
 		return false;
 
@@ -107,7 +116,10 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 	
 	if (PinCategory == UEdGraphSchema_K2::PC_Wildcard)
 		return FPropertyTypeInfo::Wildcard;
-	if (PinCategory == UEdGraphSchema_K2::PC_Exec || PinCategory == UEdGraphSchema_K2::PC_Delegate)
+	if (PinCategory == UEdGraphSchema_K2::PC_Exec
+		|| PinCategory == UEdGraphSchema_K2::PC_Delegate
+		|| PinCategory == UEdGraphSchema_K2::PC_MCDelegate
+		|| PinCategory == UEdGraphSchema_K2::PC_Interface)
 		return FPropertyTypeInfo::Invalid;
 
 	const EPinContainerType ContainerType = Type.ContainerType;
@@ -251,7 +263,7 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 	return TypeInfo;
 }
 
-FEdGraphPinType EAA::Internals::DetectPinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
+FEdGraphPinType EAA::Internals::DeterminePinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
 {
 	static const FEdGraphPinType WildcardPinType = FEdGraphPinType(UEdGraphSchema_K2::PC_Wildcard, NAME_None, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
 	
@@ -309,7 +321,7 @@ FString EAA::Internals::BuildContextConfigString(const UK2Node_EnhancedAsyncTask
 		auto* InPin = Node->FindDynamicPin(EGPD_Input, Index);
 		auto* OutPin = Node->FindDynamicPin(EGPD_Output, Index);
 			
-		auto DetectedPinType = EAA::Internals::DetectPinType(InPin, OutPin);
+		auto DetectedPinType = EAA::Internals::DeterminePinType(InPin, OutPin);
 
 		if (BuilderBase.Len())  BuilderBase.Append(TEXT(";"));
 

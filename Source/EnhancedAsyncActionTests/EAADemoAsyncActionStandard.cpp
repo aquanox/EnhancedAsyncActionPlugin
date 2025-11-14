@@ -2,7 +2,9 @@
 
 
 #include "EAADemoAsyncActionStandard.h"
+#include "EnhancedAsyncActionShared.h"
 #include "Engine/Engine.h"
+#include "Logging/StructuredLog.h"
 #include "TimerManager.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(EAADemoAsyncActionStandard)
@@ -10,6 +12,7 @@
 UEAADemoAsyncActionStandard* UEAADemoAsyncActionStandard::StartActionPseudoCapture(const UObject* WorldContextObject, int32 UserIndex, FInstancedStruct Captures)
 {
 	auto* Proxy = NewObject<ThisClass>();
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Construct Proxy {Func}", Proxy->GetName());
 	Proxy->LocalCaptures = MoveTemp(Captures);
 	Proxy->LocalUserIndex = UserIndex;
 	Proxy->LocalWorld = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
@@ -31,6 +34,7 @@ void UEAADemoAsyncActionStandard::Activate()
 UEAADemoAsyncAction* UEAADemoAsyncAction::StartDemoAction(const UObject* WorldContextObject, int32 UserIndex)
 {
 	auto* Proxy = NewObject<ThisClass>();
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Construct Proxy {Func}", Proxy->GetName());
 	Proxy->LocalUserIndex = UserIndex;
 	Proxy->LocalWorld = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
 	return Proxy;
@@ -38,6 +42,8 @@ UEAADemoAsyncAction* UEAADemoAsyncAction::StartDemoAction(const UObject* WorldCo
 
 void UEAADemoAsyncAction::Activate()
 {
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Activate {Func}", GetName());
+	
 	FTimerHandle Handle;
 	LocalWorld->GetTimerManager().SetTimer(Handle, [Owner = MakeWeakObjectPtr(this)]()
 	{

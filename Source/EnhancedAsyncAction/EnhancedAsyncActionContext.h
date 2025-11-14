@@ -5,6 +5,8 @@
 #include "StructUtils/StructView.h"
 #include "EnhancedAsyncActionContext.generated.h"
 
+#define UE_API ENHANCEDASYNCACTION_API
+
 struct FPropertyBagContainerTypes;
 enum class EPropertyBagContainerType : uint8;
 enum class EPropertyBagPropertyType : uint8;
@@ -17,9 +19,17 @@ enum class EPropertyBagPropertyType : uint8;
 	virtual void SetValue ##Name(int32 Index, UEnum* ExpectedType, uint8 InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void GetValue ##Name(int32 Index, UEnum* ExpectedType, uint8& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
+#define CONTEXT_DECLARE_OBJECT_ACCESSOR(Name, Type) \
+	virtual void SetValue ##Name(int32 Index, UClass* ExpectedClass, Type const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValue ##Name(int32 Index, UClass* ExpectedClass, Type& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
+// todo object soft ref?
+#define CONTEXT_DECLARE_CLASS_ACCESSOR(Name, Type) \
+	virtual void SetValue ##Name(int32 Index, UClass* ExpectedMetaClass, Type const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValue ##Name(int32 Index, UClass* ExpectedMetaClass, Type& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
+// todo class soft ref?
 #define CONTEXT_DECLARE_STRUCT_ACCESSOR(Name) \
-	virtual void SetValue ##Name(int32 Index, UScriptStruct* ExpectedType, FConstStructView InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-	virtual void GetValue ##Name(int32 Index, UScriptStruct* ExpectedType, FStructView& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
+	virtual void SetValue ##Name(int32 Index, UScriptStruct* ExpectedType, const uint8* InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValue ##Name(int32 Index, UScriptStruct* ExpectedType, const uint8*& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
 // Note: expose FScriptArrayHelper instead of void?
 #define CONTEXT_DECLARE_CONTAINER_ACCESSOR(Name) \
@@ -34,7 +44,7 @@ enum class EPropertyBagPropertyType : uint8;
 /**
  * A helper type containing information about runtime property data without ties to editor.
  */
-struct ENHANCEDASYNCACTION_API FPropertyTypeInfo
+struct UE_API FPropertyTypeInfo
 {
 	static const FPropertyTypeInfo Wildcard;
 	static const FPropertyTypeInfo Invalid;
@@ -77,7 +87,7 @@ struct ENHANCEDASYNCACTION_API FPropertyTypeInfo
  * Async action context data container that is held by manager
  *
  */
-struct ENHANCEDASYNCACTION_API FEnhancedAsyncActionContext
+struct UE_API FEnhancedAsyncActionContext
 {
 	FEnhancedAsyncActionContext() = default;
 	virtual ~FEnhancedAsyncActionContext() = default;
@@ -99,25 +109,32 @@ struct ENHANCEDASYNCACTION_API FEnhancedAsyncActionContext
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(String, FString)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Name, FName)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Text, FText)
-	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Object, UObject*)
-	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Class, UClass*)
+	CONTEXT_DECLARE_OBJECT_ACCESSOR(Object, UObject*)
+	// CONTEXT_DECLARE_OBJECT_ACCESSOR(Object, FSoftObjectPath)
+	CONTEXT_DECLARE_CLASS_ACCESSOR(Class, UClass*)
+	// CONTEXT_DECLARE_CLASS_ACCESSOR(Class, FSoftClassPath)
 	CONTEXT_DECLARE_ENUM_ACCESSOR(Enum)
 	CONTEXT_DECLARE_STRUCT_ACCESSOR(Struct)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Array)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
 
+private:
+	// friend class FEnhancedAsyncActionManager;
+	// friend class UEnhancedAsyncActionContextLibrary;
+	// bool bSetupAllowed = true;
+	// bool bAddReferencedObjectsAllowed = true;
 };
 
 // Wrapper over actual context data for blueprints 
 USTRUCT(BlueprintType, meta=(DisableSplitPin))
-struct FEnhancedAsyncActionContextHandle
+struct UE_API FEnhancedAsyncActionContextHandle
 {
 	GENERATED_BODY()
 public:
 	FEnhancedAsyncActionContextHandle() = default;
 	FEnhancedAsyncActionContextHandle(UObject* Owner, TSharedRef<FEnhancedAsyncActionContext> Ctx);
-	FEnhancedAsyncActionContextHandle(UObject* Owner, FName CtxProp, TSharedRef<FEnhancedAsyncActionContext> Ctx);
+	FEnhancedAsyncActionContextHandle(UObject* Owner, FName InDataProp, TSharedRef<FEnhancedAsyncActionContext> Ctx);
 
 	/** Is handle valid (has valid owning object and data) */
 	bool IsValid() const;
@@ -132,3 +149,5 @@ private:
 	
 	TWeakPtr<FEnhancedAsyncActionContext> Data;
 };
+
+#undef UE_API

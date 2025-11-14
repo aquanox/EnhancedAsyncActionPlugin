@@ -117,7 +117,9 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromStringDefinition(cons
 
 		FPropertyTypeInfo TypeInfo;
 		ensure(FPropertyTypeInfo::ParseTypeInfo(Splits[PropIndex], TypeInfo));
-
+		if (TypeInfo.IsWildcard() || !TypeInfo.IsValid())
+			continue;
+		
 		switch (TypeInfo.ContainerType)
 		{
 		case EPropertyBagContainerType::None:
@@ -236,22 +238,22 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetValueText(int32 Index, cons
 	VALIDATE_RESULT(GetValueRef()->SetValueText(Name, InValue));
 }
 
-void FEnhancedAsyncActionContext_PropertyBagBase::SetValueObject(int32 Index, UObject* const& InValue)
+void FEnhancedAsyncActionContext_PropertyBagBase::SetValueObject(int32 Index, UClass* ExpectedClass, UObject* const& InValue)
 {
 	const FName Name = EAA::Internals::IndexToName(Index);
 	if (CanAddNewProperty(Name, EPropertyBagPropertyType::Object))
 	{
-		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Object);
+		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Object, ExpectedClass);
 	}
 	VALIDATE_RESULT(GetValueRef()->SetValueObject(Name, InValue));
 }
 
-void FEnhancedAsyncActionContext_PropertyBagBase::SetValueClass(int32 Index, UClass* const& InValue)
+void FEnhancedAsyncActionContext_PropertyBagBase::SetValueClass(int32 Index, UClass* ExpectedMetaClass, UClass* const& InValue)
 {
 	const FName Name = EAA::Internals::IndexToName(Index);
 	if (CanAddNewProperty(Name, EPropertyBagPropertyType::Class))
 	{
-		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Class);
+		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Class, ExpectedMetaClass);
 	}
 	VALIDATE_RESULT(GetValueRef()->SetValueClass(Name, InValue));
 }
@@ -266,14 +268,14 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetValueEnum(int32 Index, UEnu
 	VALIDATE_RESULT(GetValueRef()->SetValueEnum(Name, InValue, ExpectedType));
 }
 
-void FEnhancedAsyncActionContext_PropertyBagBase::SetValueStruct(int32 Index, UScriptStruct* ExpectedType, FConstStructView InValue)
+void FEnhancedAsyncActionContext_PropertyBagBase::SetValueStruct(int32 Index, UScriptStruct* ExpectedType, const uint8* InValue)
 {
 	const FName Name = EAA::Internals::IndexToName(Index);
 	if (CanAddNewProperty(Name, EPropertyBagPropertyType::Struct))
 	{
 		GetValueRef()->AddProperty(Name, EPropertyBagPropertyType::Struct, ExpectedType);
 	}
-	VALIDATE_RESULT(GetValueRef()->SetValueStruct(Name, InValue));
+	VALIDATE_RESULT(GetValueRef()->SetValueStruct(Name, FConstStructView(ExpectedType, InValue)));
 }
 
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueBool(int32 Index, bool& OutValue)
@@ -357,26 +359,36 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueText(int32 Index, FTex
 	}
 }
 
-void FEnhancedAsyncActionContext_PropertyBagBase::GetValueObject(int32 Index, UObject*& OutValue)
+void FEnhancedAsyncActionContext_PropertyBagBase::GetValueObject(int32 Index, UClass* ExpectedClass, UObject*& OutValue)
 {
-	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueObject(EAA::Internals::IndexToName(Index)));
+	OutValue = nullptr;
+	
+	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueObject(EAA::Internals::IndexToName(Index), ExpectedClass));
 	if (Value.HasValue() && !Value.HasError())
 	{
 		OutValue = Value.GetValue();
 	}
 }
 
-void FEnhancedAsyncActionContext_PropertyBagBase::GetValueClass(int32 Index, UClass*& OutValue)
+void FEnhancedAsyncActionContext_PropertyBagBase::GetValueClass(int32 Index, UClass* ExpectedMetaClass, UClass*& OutValue)
 {
+	OutValue = nullptr;
+	
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueClass(EAA::Internals::IndexToName(Index)));
 	if (Value.HasValue() && !Value.HasError())
 	{
 		OutValue = Value.GetValue();
+		if (ExpectedMetaClass && OutValue && !OutValue->IsChildOf(ExpectedMetaClass))
+		{
+			OutValue = nullptr;
+		}
 	}
 }
 
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueEnum(int32 Index, UEnum* ExpectedType, uint8& OutValue)
 {
+	OutValue = 0;
+	
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueEnum(EAA::Internals::IndexToName(Index), ExpectedType));
 	if (Value.HasValue() && !Value.HasError())
 	{
@@ -384,12 +396,14 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueEnum(int32 Index, UEnu
 	}
 }
 
-void FEnhancedAsyncActionContext_PropertyBagBase::GetValueStruct(int32 Index, UScriptStruct* ExpectedType, FStructView& OutValue)
+void FEnhancedAsyncActionContext_PropertyBagBase::GetValueStruct(int32 Index, UScriptStruct* ExpectedType, const uint8*& OutValue)
 {
+	OutValue = nullptr;
+	
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueStruct(EAA::Internals::IndexToName(Index), ExpectedType));
 	if (Value.HasValue() && !Value.HasError())
 	{
-		OutValue = Value.GetValue();
+		OutValue = Value.GetValue().GetMemory();
 	}
 }
 
@@ -441,6 +455,31 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetSetRefForRead(int32 Index, 
 	{
 		Value = GetValueRef()->GetValueAddress(SetData.GetValue());
 	}
+}
+
+FEnhancedAsyncActionContext_PropertyBagRef::FEnhancedAsyncActionContext_PropertyBagRef(const UObject* OwningObject, FName PropertyName): OwnerRef(OwningObject)
+{
+	OwnerRef = OwningObject;
+	ValueRef = EAA::Internals::GetMemberChecked<FInstancedPropertyBag>(OwningObject, PropertyName, FInstancedPropertyBag::StaticStruct());
+}
+
+bool FEnhancedAsyncActionContext_PropertyBagRef::IsValid() const
+{
+	// Validate that owner is still alive
+	// Validate that object was not affected by reinstancing
+	return OwnerRef.IsValid()
+		// && ensureAlways(OwnerRef.Get() == OwnerRefValidateReinstancing)
+		&& Super::IsValid();
+}
+
+void FEnhancedAsyncActionContext_PropertyBagRef::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	/* not needed, node is already uproperty and use AddStructReferencedObjects */
+}
+
+FEnhancedAsyncActionContext_PropertyBag::FEnhancedAsyncActionContext_PropertyBag()
+{
+	ValueRef = &Value;
 }
 
 #undef VALIDATE_RESULT

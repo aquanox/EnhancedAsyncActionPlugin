@@ -119,12 +119,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category="EAA|Setters", DisplayName="Set Text Value", meta=(BlueprintInternalUseOnly=true))
 	static UE_API void Handle_SetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FText& Value);
 
-	UFUNCTION(BlueprintCallable, Category="EAA|Setters", DisplayName="Set Object Value", meta=(BlueprintInternalUseOnly=true))
-	static UE_API void Handle_SetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject* Value);
-
-	UFUNCTION(BlueprintCallable, Category="EAA|Setters", DisplayName="Set Class Value", meta=(BlueprintInternalUseOnly=true))
-	static UE_API void Handle_SetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass* Value);
-
 	// ======== SETTERS [ GENERIC ] ============
 
 	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Generic Value", meta=(BlueprintInternalUseOnly=false, SetParam="Value"))
@@ -142,7 +136,17 @@ public:
 
 	DECLARE_FUNCTION(execHandle_SetValue_Struct);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Array Value", meta=(BlueprintInternalUseOnly=false, SetParam = "Value", ArrayParm = "Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Object Value", meta=(BlueprintInternalUseOnly=false))
+	static UE_API void Handle_SetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject* Value);
+
+	DECLARE_FUNCTION(execHandle_SetValue_Object);
+
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Class Value", meta=(BlueprintInternalUseOnly=false))
+	static UE_API void Handle_SetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass* Value);
+
+	DECLARE_FUNCTION(execHandle_SetValue_Class);
+
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Array Value", meta=(BlueprintInternalUseOnly=false, ArrayParm = "Value"))
 	static UE_API void Handle_SetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TArray<int32>& Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Array);
@@ -181,12 +185,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category="EAA|Getters", DisplayName="Get Text Value", meta=(BlueprintInternalUseOnly=true))
 	static UE_API void Handle_GetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FText& Value);
 
-	UFUNCTION(BlueprintCallable, Category="EAA|Getters", DisplayName="Get Object Value", meta=(BlueprintInternalUseOnly=true))
-	static UE_API void Handle_GetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject*& Value);
-
-	UFUNCTION(BlueprintCallable, Category="EAA|Getters", DisplayName="Get Class Value", meta=(BlueprintInternalUseOnly=true))
-	static UE_API void Handle_GetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass*& Value);
-
 	// ========= GETTERS [ GENERIC ] ============
 
 	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Generic Value", meta=(BlueprintInternalUseOnly=false, SetParam="Value"))
@@ -204,7 +202,17 @@ public:
 
 	DECLARE_FUNCTION(execHandle_GetValue_Struct);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Array Value", meta=(BlueprintInternalUseOnly=false, SetParam = "Value", ArrayParm = "Value"))
+	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Object Value", meta=(BlueprintInternalUseOnly=false, DynamicOutputParam="Value"))
+	static UE_API void Handle_GetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject*& Value);
+
+	DECLARE_FUNCTION(execHandle_GetValue_Object);
+	
+	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Class Value", meta=(BlueprintInternalUseOnly=false, DynamicOutputParam="Value"))
+	static UE_API void Handle_GetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass*& Value);
+
+	DECLARE_FUNCTION(execHandle_GetValue_Class);
+	
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Array Value", meta=(BlueprintInternalUseOnly=false, ArrayParm = "Value"))
 	static UE_API void Handle_GetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TArray<int32>& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Array);

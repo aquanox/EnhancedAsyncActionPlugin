@@ -751,7 +751,7 @@ void UK2Node_EnhancedAsyncTaskBase::SynchronizeArgumentPinType(UEdGraphPin* Pin)
 	UEdGraphPin* OutputPin = FindMatchingPin(Pin, EGPD_Output);
 	check(InputPin && OutputPin);
 
-	FEdGraphPinType NewType = EAA::Internals::DetectPinType(InputPin, OutputPin);
+	FEdGraphPinType NewType = EAA::Internals::DeterminePinType(InputPin, OutputPin);
 
 	bool bPinTypeChanged = false;
 	auto ApplyPinType = [&bPinTypeChanged](UEdGraphPin* LocalPin, const FEdGraphPinType& Type)
@@ -764,6 +764,8 @@ void UK2Node_EnhancedAsyncTaskBase::SynchronizeArgumentPinType(UEdGraphPin* Pin)
 	};
 	ApplyPinType(InputPin, NewType);
 	ApplyPinType(OutputPin, NewType);
+
+	UE_LOG(LogEnhancedAction, Verbose, TEXT("SyncType %s => %s"), *EAA::Internals::ToDebugString(Pin), *EAA::Internals::ToDebugString(NewType))
 	
 	if (bPinTypeChanged)
 	{
@@ -1113,6 +1115,11 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 			AssignNode->NotifyPinConnectionListChanged(AssignNode->GetVariablePin());
 			// return
 			UEdGraphPin* ValuePin = CallReadNode->FindPinChecked(EAA::Internals::PIN_Value);
+			// todo: remove this hack and solve how to conform these two
+			// GET_Object and GET_Class return UObject*& and has no PinCategoryObject set (should be forced to be wildcard?)
+			// so TryCreateConnection fails. as it has PinCategoryObject known.
+			// Force ValuePin PinCategoryObject to known value, in case types mismatch it will result in assert in execGetObject/GetValueObject
+			ConformDynamicOutputPin(Schema, CallReadNode, ValuePin, AssignNode->GetVariablePin()->PinType);
 			bIsErrorFree &= Schema->TryCreateConnection(AssignNode->GetValuePin(), ValuePin);
 			AssignNode->NotifyPinConnectionListChanged(AssignNode->GetValuePin());
 			CallReadNode->NotifyPinConnectionListChanged(ValuePin);
@@ -1153,6 +1160,25 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 
 	
 	return bIsErrorFree;
+}
+
+void UK2Node_EnhancedAsyncTaskBase::ConformDynamicOutputPin(const UEdGraphSchema_K2* Schema, UK2Node_CallFunction* Func, UEdGraphPin* Pin, const FEdGraphPinType& VarType)
+{
+	auto DynamicPin = Func->GetTargetFunction()->FindMetaData(FBlueprintMetadata::MD_DynamicOutputParam);
+	if (DynamicPin && *DynamicPin == Pin->GetName() && Pin->PinType.PinCategory == VarType.PinCategory)
+	{
+		const FName PinCategory = Pin->PinType.PinCategory;
+		if ((PinCategory == UEdGraphSchema_K2::PC_Object) ||
+			(PinCategory == UEdGraphSchema_K2::PC_Interface) ||
+			(PinCategory == UEdGraphSchema_K2::PC_Class) ||
+			(PinCategory == UEdGraphSchema_K2::PC_SoftObject) || 
+			(PinCategory == UEdGraphSchema_K2::PC_SoftClass))
+		{
+			//UClass* ExpectedClass = CastChecked<UClass>(VarType.PinSubCategoryObject.Get());
+			//UClass* GetterClass = CastChecked<UClass>(Pin->PinType.PinSubCategoryObject.Get());
+			Pin->PinType = VarType;
+		}
+	}
 }
 
 void UK2Node_EnhancedAsyncTaskBase::OrphanCapturePins()

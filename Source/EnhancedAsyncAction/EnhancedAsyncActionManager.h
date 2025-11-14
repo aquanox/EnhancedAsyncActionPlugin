@@ -14,7 +14,7 @@ struct FEnhancedAsyncActionContextHandle;
  *
  * For each instance of proxy class it can store one instance of context data
  */
-class FEnhancedAsyncActionManager : public FGCObject
+class ENHANCEDASYNCACTION_API FEnhancedAsyncActionManager : public FGCObject
 {
 public:
 	/**

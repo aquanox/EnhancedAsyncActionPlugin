@@ -149,8 +149,8 @@ FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(UObject* In
 {
 }
 
-FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(UObject* InOwner, FName CtxProp, TSharedRef<FEnhancedAsyncActionContext> Ctx)
-	: Owner(InOwner), DataProperty(CtxProp), Data(Ctx)
+FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(UObject* InOwner, FName InDataProp, TSharedRef<FEnhancedAsyncActionContext> Ctx)
+	: Owner(InOwner), DataProperty(InDataProp), Data(Ctx)
 {
 }
 

@@ -15,7 +15,7 @@
 UEAADemoAsyncActionCapture* UEAADemoAsyncActionCapture::StartActionWithCapture(const UObject* WorldContextObject,  bool bDirectCall, const int32 UserIndex)
 {
 	auto Proxy = NewObject<ThisClass>();
-	UE_LOGFMT(LogEnhancedAction, Log, "Construct Proxy {Func}", Proxy->GetName());
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Construct Proxy {Func}", Proxy->GetName());
 	Proxy->PayloadMode = bDirectCall ? EEAAPayloadMode::DIRECT : EEAAPayloadMode::TIMER;
 	Proxy->LocalUserIndex = UserIndex;
 	Proxy->World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
@@ -27,7 +27,7 @@ void UEAADemoAsyncActionCapture::Activate()
 {
 	auto Self = MakeWeakObjectPtr(this);
 	
-	UE_LOGFMT(LogEnhancedAction, Log, "Activate {Func}", Self->GetName());
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Activate {Func}", Self->GetName());
 	if (PayloadMode == EEAAPayloadMode::ASYNC)
 	{
 		AsyncTask(ENamedThreads::GameThread, [Self]() { ensure(Self.IsValid()); Self->InvokePayload(); });
@@ -47,7 +47,7 @@ void UEAADemoAsyncActionCapture::InvokePayload()
 {
 	SetReadyToDestroy();
 	
-	UE_LOGFMT(LogEnhancedAction, Log, "Payload {Func}", GetName());
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Payload {Func}", GetName());
 	OnCompleted.Broadcast(this, LocalUserIndex, TEXT("username"), TArray<int32>());
 }
 
@@ -63,7 +63,7 @@ UEAADemoAsyncActionCaptureMember::UEAADemoAsyncActionCaptureMember()
 UEAADemoAsyncActionCaptureMember* UEAADemoAsyncActionCaptureMember::StartActionWithCaptureFixed(const UObject* WorldContextObject,  bool bDirectCall, const int32 UserIndex)
 {
 	auto Proxy = NewObject<ThisClass>();
-	UE_LOGFMT(LogEnhancedAction, Log, "Construct Proxy {Func}", Proxy->GetName());
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Construct Proxy {Func}", Proxy->GetName());
 	Proxy->PayloadMode = bDirectCall ? EEAAPayloadMode::DIRECT : EEAAPayloadMode::TIMER;
 	Proxy->LocalUserIndex = UserIndex;
 	Proxy->World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);

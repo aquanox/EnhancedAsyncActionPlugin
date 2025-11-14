@@ -46,7 +46,6 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 	OutFunction = NAME_None;
 
 #define CASE_NOT_IMPLEMENTED(Type) case EPropertyBagPropertyType::Type: ensureAlways(false); break
-// #define NOT_IMPLEMENTED_YET() break
 	
 #define FUNC_SELECT(Set, Get) \
 	OutFunction = Role == EAccessorRole::SETTER \
@@ -72,12 +71,11 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 			CASE_SELECT(Struct, Handle_SetValue_Struct, Handle_GetValue_Struct);
 			CASE_SELECT(Object, Handle_SetValue_Object, Handle_GetValue_Object);
 			CASE_SELECT(Class, Handle_SetValue_Class, Handle_GetValue_Class);
-			CASE_SELECT(SoftObject, Handle_SetValue_Struct, Handle_GetValue_Struct);
-			CASE_SELECT(SoftClass, Handle_SetValue_Struct, Handle_GetValue_Struct);
-			CASE_SELECT(UInt32, Handle_SetValue_Int32, Handle_GetValue_Int32);
-			CASE_SELECT(UInt64, Handle_SetValue_Int64, Handle_GetValue_Int64);
+			// CASE_SELECT(SoftObject, Handle_SetValue_Struct, Handle_GetValue_Struct);
+			// CASE_SELECT(SoftClass, Handle_SetValue_Struct, Handle_GetValue_Struct);
+			// CASE_SELECT(UInt32, Handle_SetValue_Int32, Handle_GetValue_Int32);
+			// CASE_SELECT(UInt64, Handle_SetValue_Int64, Handle_GetValue_Int64);
 		default:
-			checkNoEntry();
 			break;
 		}
 	}
@@ -250,19 +248,19 @@ UObject* EAA::Internals::GetValueTypeObjectFromProperty(const FProperty* InSourc
 	}
 	if (const auto* Property = CastField<FObjectProperty>(InSourceProperty))
 	{
+		if (const auto* ClassProperty = CastField<FClassProperty>(InSourceProperty))
+		{
+			return ClassProperty->MetaClass;
+		}
 		return Property->PropertyClass;
 	}
-	if (const auto* Property = CastField<FClassProperty>(InSourceProperty))
+	if (const auto* SoftObjectProperty = CastField<FSoftObjectProperty>(InSourceProperty))
 	{
-		return Property->MetaClass;
-	}
-	if (const auto* Property = CastField<FSoftObjectProperty>(InSourceProperty))
-	{
-		return Property->PropertyClass;
-	}
-	if (const auto* Property = CastField<FSoftClassProperty>(InSourceProperty))
-	{
-		return Property->MetaClass;
+		if (const auto* SoftClassProperty = CastField<FSoftClassProperty>(InSourceProperty))
+		{
+			return SoftClassProperty->MetaClass;
+		}
+		return SoftObjectProperty->PropertyClass;
 	}
 	
 	return nullptr;
