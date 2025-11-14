@@ -96,16 +96,23 @@ TSharedRef<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContext
 
 TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContext(const FEnhancedAsyncActionContextHandle& Handle)
 {
-	return Handle.IsValid() ? Handle.Data.Pin() : nullptr;
+	if (!Handle.IsValid())
+	{ // handle itself is not valid
+		return nullptr;
+	}
+	auto ActualContext = Handle.Data.Pin();
+	
+	if (!ActualContext || !ActualContext->IsValid())
+	{ // implementation is bad (like inner uobject member ref)
+		return nullptr;
+	}
+	return ActualContext;
 }
 
 TSharedRef<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContextSafe(const FEnhancedAsyncActionContextHandle& Handle)
 {
-	if (Handle.IsValid())
-	{
-		return Handle.Data.Pin().ToSharedRef();
-	}
-	return DummyContext;
+	auto ActualContext = FindContext(Handle);
+	return ActualContext ? ActualContext.ToSharedRef() : DummyContext;
 }
 
 void FEnhancedAsyncActionManager::AddReferencedObjects(FReferenceCollector& Collector)
@@ -113,19 +120,10 @@ void FEnhancedAsyncActionManager::AddReferencedObjects(FReferenceCollector& Coll
 	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
 	for (auto It = ActionContexts.CreateIterator(); It; ++It)
 	{
-		// auto* Owner = It->Key.ResolveObjectPtr();
-		// if (!Owner)
-		// {
-		// 	It->Value.Reset();
-		// 	It.RemoveCurrent();
-		// 	continue;
-		// }
-		It->Value->AddReferencedObjects(Collector);
-	}
-
-	if (ActionContexts.Num() == 0)
-	{
-		// ObjectListener.DisableListener();
+		if (It->Value->bAddReferencedObjectsAllowed && It->Value->IsValid())
+		{
+			It->Value->AddReferencedObjects(Collector);
+		}
 	}
 }
 

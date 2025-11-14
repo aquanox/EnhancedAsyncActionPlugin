@@ -45,36 +45,65 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 {
 	OutFunction = NAME_None;
 
-#define CASE_NOT_IMPLEMENTED(Type) case EPropertyBagPropertyType::Type: ensureAlways(false); break
-	
 #define FUNC_SELECT(Set, Get) \
 	OutFunction = Role == EAccessorRole::SETTER \
 		? GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Set) \
 		: GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Get);
 
-#define CASE_SELECT(Type, Set, Get) case EPropertyBagPropertyType::Type: FUNC_SELECT(Set, Get); break
-
+#define FUNC_SELECT_GENERIC()  \
+	OutFunction = Role == EAccessorRole::SETTER  \
+		? GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_SetValue_Generic)   \
+		: GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_GetValue_Generic);
+	
 	if (TypeInfo.ContainerType == EPropertyBagContainerType::None)
 	{
 		switch(TypeInfo.ValueType)
 		{
-			CASE_SELECT(Bool, Handle_SetValue_Bool, Handle_GetValue_Bool);
-			CASE_SELECT(Byte, Handle_SetValue_Byte, Handle_GetValue_Byte);
-			CASE_SELECT(Int32, Handle_SetValue_Int32, Handle_GetValue_Int32);
-			CASE_SELECT(Int64, Handle_SetValue_Int64, Handle_GetValue_Int64);
-			CASE_SELECT(Float, Handle_SetValue_Float, Handle_GetValue_Float);
-			CASE_SELECT(Double, Handle_SetValue_Double, Handle_GetValue_Double);
-			CASE_SELECT(Name, Handle_SetValue_Name, Handle_GetValue_Name);
-			CASE_SELECT(String, Handle_SetValue_String, Handle_GetValue_String);
-			CASE_SELECT(Text, Handle_SetValue_Text, Handle_GetValue_Text);
-			CASE_SELECT(Enum, Handle_SetValue_Enum, Handle_GetValue_Enum);
-			CASE_SELECT(Struct, Handle_SetValue_Struct, Handle_GetValue_Struct);
-			CASE_SELECT(Object, Handle_SetValue_Object, Handle_GetValue_Object);
-			CASE_SELECT(Class, Handle_SetValue_Class, Handle_GetValue_Class);
-			CASE_SELECT(SoftObject, Handle_SetValue_SoftObject, Handle_GetValue_SoftObject);
-			CASE_SELECT(SoftClass, Handle_SetValue_SoftClass, Handle_GetValue_SoftClass);
-			// CASE_SELECT(UInt32, Handle_SetValue_Int32, Handle_GetValue_Int32);
-			// CASE_SELECT(UInt64, Handle_SetValue_Int64, Handle_GetValue_Int64);
+		case EPropertyBagPropertyType::Bool:
+			FUNC_SELECT(Handle_SetValue_Bool, Handle_GetValue_Bool);
+			break;
+		case EPropertyBagPropertyType::Byte:
+			FUNC_SELECT(Handle_SetValue_Byte, Handle_GetValue_Byte);
+			break;
+		case EPropertyBagPropertyType::Int32:
+			FUNC_SELECT(Handle_SetValue_Int32, Handle_GetValue_Int32);
+			break;
+		case EPropertyBagPropertyType::Int64:
+			FUNC_SELECT(Handle_SetValue_Int64, Handle_GetValue_Int64);
+			break;
+		case EPropertyBagPropertyType::Float:
+			FUNC_SELECT(Handle_SetValue_Float, Handle_GetValue_Float);
+			break;
+		case EPropertyBagPropertyType::Double:
+			FUNC_SELECT(Handle_SetValue_Double, Handle_GetValue_Double);
+			break;
+		case EPropertyBagPropertyType::Name:
+			FUNC_SELECT(Handle_SetValue_Name, Handle_GetValue_Name);
+			break;
+		case EPropertyBagPropertyType::String:
+			FUNC_SELECT(Handle_SetValue_String, Handle_GetValue_String);
+			break;
+		case EPropertyBagPropertyType::Text:
+			FUNC_SELECT(Handle_SetValue_Text, Handle_GetValue_Text);
+			break;
+		case EPropertyBagPropertyType::Enum:
+			FUNC_SELECT(Handle_SetValue_Enum, Handle_GetValue_Enum);
+			break;
+		case EPropertyBagPropertyType::Struct:
+			FUNC_SELECT(Handle_SetValue_Struct, Handle_GetValue_Struct);
+			break;
+		case EPropertyBagPropertyType::Object:
+			FUNC_SELECT(Handle_SetValue_Object, Handle_GetValue_Object);
+			break;
+		case EPropertyBagPropertyType::Class:
+			FUNC_SELECT(Handle_SetValue_Class, Handle_GetValue_Class);
+			break;
+		case EPropertyBagPropertyType::SoftObject:
+			FUNC_SELECT(Handle_SetValue_SoftObject, Handle_GetValue_SoftObject);
+			break;
+		case EPropertyBagPropertyType::SoftClass:
+			FUNC_SELECT(Handle_SetValue_SoftClass, Handle_GetValue_SoftClass);
+			break;
 		default:
 			break;
 		}
@@ -95,14 +124,11 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 			FUNC_SELECT(Handle_SetValue_Set, Handle_GetValue_Set);
 		}
 	}
-	else
-	{
-		checkNoEntry();
-	}
 	
 #undef NOT_IMPLEMENTED_YET
 #undef CASE_SELECT
 #undef FUNC_SELECT
+#undef FUNC_SELECT_GENERIC
 	
 	return !OutFunction.IsNone();
 }
@@ -119,26 +145,6 @@ EPropertyBagContainerType EAA::Internals::GetContainerTypeFromProperty(const FPr
 	}
 
 	return EPropertyBagContainerType::None;
-}
-
-FPropertyBagContainerTypes EAA::Internals::GetContainerTypesFromProperty(const FProperty* InSourceProperty)
-{
-	FPropertyBagContainerTypes ContainerTypes;
-
-	while (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(InSourceProperty))
-	{
-		if (ContainerTypes.Add(EPropertyBagContainerType::Array))
-		{
-			InSourceProperty = CastField<FArrayProperty>(ArrayProperty->Inner);
-		}
-		else // we reached the nested containers limit
-		{
-			ContainerTypes.Reset();
-			break;
-		}
-	}
-
-	return ContainerTypes;
 }
 
 EPropertyBagPropertyType EAA::Internals::GetValueTypeFromProperty(const FProperty* InSourceProperty)
@@ -217,14 +223,12 @@ EPropertyBagPropertyType EAA::Internals::GetValueTypeFromProperty(const FPropert
 	// Handle array property
 	if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(InSourceProperty))
 	{
-		checkNoEntry();
 		return GetValueTypeFromProperty(ArrayProperty->Inner);	
 	}
 
 	// Handle set property
 	if (const FSetProperty* SetProperty = CastField<FSetProperty>(InSourceProperty))
 	{
-		checkNoEntry();
 		return GetValueTypeFromProperty(SetProperty->ElementProp);	
 	}
 	

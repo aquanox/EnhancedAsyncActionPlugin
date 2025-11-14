@@ -36,12 +36,12 @@ enum class EPropertyBagPropertyType : uint8;
 	virtual void GetValue ##Name(int32 Index, UScriptStruct* ExpectedType, const uint8*& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
 #define CONTEXT_DECLARE_CONTAINER_ACCESSOR(Name) \
-	virtual void Get ##Name## RefForWrite(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, void*& PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-	virtual void Get ##Name## RefForRead(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, const void*& PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE;
+	virtual void SetValue ##Name(int32 Index, EPropertyBagPropertyType Type, const UObject* TypeObject, const void* PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValue ##Name(int32 Index, EPropertyBagPropertyType Type, const UObject* TypeObject, void* PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
 #define CONTEXT_DECLARE_SET_ACCESSOR(Name) \
-	virtual void Get ##Name## RefForWrite(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, void*& Accessor) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-	virtual void Get ##Name## RefForRead(int32 Index, EPropertyBagPropertyType Type, UObject* TypeObject, const void*& Accessor) CONTEXT_PROPERTY_ACCESSOR_MODE;
+	virtual void SetValue ##Name(int32 Index, EPropertyBagPropertyType Type, const UObject* TypeObject, const void* PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE; \
+	virtual void GetValue ##Name(int32 Index, EPropertyBagPropertyType Type, const UObject* TypeObject, void* PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
 /**
  * A helper type containing information about runtime property data without ties to editor.
@@ -119,11 +119,13 @@ struct UE_API FEnhancedAsyncActionContext
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
 
-private:
-	// friend class FEnhancedAsyncActionManager;
+	virtual bool SetValue(int32 Index, const FProperty* Property, const void* Value, FString* Error) =0;
+	virtual bool GetValue(int32 Index, const FProperty* Property, void* OutValue, FString* Error) =0;
+protected:
+	friend class FEnhancedAsyncActionManager;
+	bool bAddReferencedObjectsAllowed = true;
 	// friend class UEnhancedAsyncActionContextLibrary;
 	// bool bSetupAllowed = true;
-	// bool bAddReferencedObjectsAllowed = true;
 };
 
 // Wrapper over actual context data for blueprints 
@@ -144,7 +146,9 @@ private:
 	friend class FEnhancedAsyncActionManager;
 	friend class UEnhancedAsyncActionContextLibrary;
 
+	UPROPERTY()
 	TWeakObjectPtr<UObject> Owner;
+	UPROPERTY()
 	FName DataProperty;
 	
 	TWeakPtr<FEnhancedAsyncActionContext> Data;

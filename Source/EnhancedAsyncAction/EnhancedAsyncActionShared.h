@@ -73,7 +73,6 @@ namespace EAA::Internals
 	UE_API bool SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EAccessorRole Role, FName& OutFunction);
 
 	EPropertyBagContainerType GetContainerTypeFromProperty(const FProperty* InSourceProperty);
-	FPropertyBagContainerTypes GetContainerTypesFromProperty(const FProperty* InSourceProperty);
 	EPropertyBagPropertyType GetValueTypeFromProperty(const FProperty* InSourceProperty);
 	UObject* GetValueTypeObjectFromProperty(const FProperty* InSourceProperty);
 

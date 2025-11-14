@@ -37,17 +37,17 @@ FString FPropertyTypeInfo::EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo)
 		checkNoEntry();
 		break;
 	case EPropertyBagContainerType::None:
-		Builder.Append(TEXT("[N]"));
+		Builder.Append(TEXT("N:"));
 		break;
 	case EPropertyBagContainerType::Array:
-		Builder.Append(TEXT("[A]"));
+		Builder.Append(TEXT("A:"));
 		break;
 	case EPropertyBagContainerType::Set:
-		Builder.Append(TEXT("[S]"));
+		Builder.Append(TEXT("S:"));
 		break;
 	// TODO: maps supported in 5.8
 	// case EPropertyBagContainerType::Count:
-		// Builder.Append(TEXT("[M]"));
+		// Builder.Append(TEXT("M:"));
 		// break;
 	}
 	
@@ -66,14 +66,14 @@ FString FPropertyTypeInfo::EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo)
 
 bool FPropertyTypeInfo::ParseTypeInfo(FString Data, FPropertyTypeInfo& TypeInfo)
 {
-	if (Data.Len() < 4 || Data[0] != TEXT('[') || Data[2] != TEXT(']'))
+	if (Data.Len() < 4 || Data[1] != TEXT(':'))
 	{
 		ensureAlwaysMsgf(false, TEXT("Bad type format"));
 		return false;
 	}
 
-	TCHAR ContainerTypeKey = Data[1];
-	Data.MidInline(3);
+	TCHAR ContainerTypeKey = Data[0];
+	Data.MidInline(2);
 	
 	if (ContainerTypeKey == TEXT('N') || ContainerTypeKey == TEXT('A') || ContainerTypeKey == TEXT('S'))
 	{

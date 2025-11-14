@@ -43,7 +43,7 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::CreateCont
 	}
 	else
 	{
-		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBag>();
+		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBag>(Action);
 		if (!InDataProperty.IsNone())
 		{
 			UE_LOG(LogEnhancedAction, Log, TEXT("Missing expected member property %s:%s"), *Action->GetClass()->GetName(), *InDataProperty.ToString());
@@ -83,7 +83,7 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::GetTestCap
 	FEnhancedAsyncActionContextHandle ContextHandle = FEnhancedAsyncActionManager::Get().FindContextHandle(Context);
 	if (!ContextHandle.IsValid())
 	{
-		ContextHandle = FEnhancedAsyncActionManager::Get().SetContext(Context, MakeShared<FEnhancedAsyncActionContext_PropertyBag>());
+		ContextHandle = FEnhancedAsyncActionManager::Get().SetContext(Context, MakeShared<FEnhancedAsyncActionContext_PropertyBag>(Context));
 	}
 	return ContextHandle;
 }
@@ -170,105 +170,37 @@ void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Text(const FEnhancedAsy
 	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueText(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Basic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, EPropertyBagPropertyType Type, const int32 Value)
+void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Basic)
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Generic)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
-	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	P_GET_ENUM(EPropertyBagPropertyType,ParamType);
+	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+	P_GET_PROPERTY(FIntProperty, ParamIndex);
+
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FProperty>(nullptr);
-	
+
 	const FProperty* ValueProp = CastField<FProperty>(Stack.MostRecentProperty);
 	const void* ValuePtr = Stack.MostRecentPropertyAddress;
-	
+
 	P_FINISH;
 
 	EAA_KISMET_ENSURE(ValueProp != nullptr && ValuePtr != nullptr, "Failed to resolve the Value Property for Set Value Basic");
 
 	P_NATIVE_BEGIN;
-
-	bool bValidCall = false;
-	
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
-	switch (ParamType)
+
+	FString Message;
+	if (!ensureAlways(ContextSafe->SetValue(ParamIndex, ValueProp, ValuePtr, &Message)))
 	{
-	case EPropertyBagPropertyType::Bool:
-		bValidCall = ValueProp && ValueProp->IsA(FBoolProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueBool(ParamIndex, *(const bool*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Byte:
-		bValidCall = ValueProp && ValueProp->IsA(FByteProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueByte(ParamIndex, *(const uint8*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Int32:
-		bValidCall = ValueProp && ValueProp->IsA(FIntProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueInt32(ParamIndex, *(const int32*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Int64:
-		bValidCall = ValueProp && ValueProp->IsA(FInt64Property::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueInt64(ParamIndex, *(const int64*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Float:
-		bValidCall = ValueProp && ValueProp->IsA(FFloatProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueFloat(ParamIndex, *(const float*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Double:
-		bValidCall = ValueProp && ValueProp->IsA(FDoubleProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueDouble(ParamIndex, *(const double*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::String:
-		bValidCall = ValueProp && ValueProp->IsA(FStrProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueString(ParamIndex, *(const FString*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Name:
-		bValidCall = ValueProp && ValueProp->IsA(FNameProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueName(ParamIndex, *(const FName*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Text:
-		bValidCall = ValueProp && ValueProp->IsA(FTextProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->SetValueText(ParamIndex, *(const FText*)ValuePtr);
-		}
-		break;
-	default:
-		bValidCall = false;
-		break;
+		FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution,  FText::FromString(Message) );
+		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
 	}
-
-	EAA_KISMET_ENSURE(bValidCall, "Unsupported property type the Value for Set Value Basic");
-
 	P_NATIVE_END;
 }
 
@@ -420,23 +352,24 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Array)
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
-	Stack.StepCompiledIn<FArrayProperty>(NULL);
-	void* SrcArrayAddr = Stack.MostRecentPropertyAddress;
+	Stack.StepCompiledIn<FArrayProperty>(nullptr);
+	
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
-	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr);
+	const void* ArrayAddr = Stack.MostRecentPropertyAddress;
+	const void* ArrayContainerAddr = Stack.MostRecentPropertyContainer;
+
+	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr && ArrayAddr != nullptr);
 
 	P_FINISH;
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
-	auto ElementType = EAA::Internals::GetValueTypeFromProperty(ArrayProperty->Inner);
-	auto ElementTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ArrayProperty->Inner);
-	void* PropertyAddress = nullptr;
-	ContextSafe->GetArrayRefForWrite(ParamIndex, ElementType, ElementTypeObject, PropertyAddress);
-	if (PropertyAddress)
-	{
-		ArrayProperty->CopyCompleteValueFromScriptVM(PropertyAddress, SrcArrayAddr);
-	}
+	auto ValueType = EAA::Internals::GetValueTypeFromProperty(ArrayProperty);
+	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ArrayProperty);
+
+	const void* ValuePtr = ArrayProperty->ContainerPtrToValuePtr<const void>(ArrayContainerAddr);
+	ensureAlways(ValuePtr == ArrayAddr);
+	ContextSafe->SetValueArray(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
 	P_NATIVE_END;
 }
 
@@ -453,22 +386,22 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FSetProperty>(NULL);
-	void* SrcSetAddr = Stack.MostRecentPropertyAddress;
+	
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
-	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr);
+	const void* SetAddr = Stack.MostRecentPropertyAddress;
+	const void* SetContainerAddr = Stack.MostRecentPropertyContainer;
+	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
 
 	P_FINISH;
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
-	auto ElementType = EAA::Internals::GetValueTypeFromProperty(SetProperty->ElementProp);
-	auto ElementTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(SetProperty->ElementProp);
-	void* PropertyAddress = nullptr;
-	ContextSafe->GetSetRefForWrite(ParamIndex, ElementType, ElementTypeObject, PropertyAddress);
-	if (PropertyAddress)
-	{
-		SetProperty->CopyCompleteValueFromScriptVM(PropertyAddress, SrcSetAddr);
-	}
+	auto ValueType = EAA::Internals::GetValueTypeFromProperty(SetProperty);
+	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(SetProperty);
+
+	const void* ValuePtr = SetProperty->ContainerPtrToValuePtr<const void>(SetContainerAddr);
+	ensureAlways(ValuePtr == SetAddr);
+	ContextSafe->SetValueSet(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
 	P_NATIVE_END;
 }
 
@@ -519,17 +452,16 @@ void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Text(const FEnhancedAsy
 	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueText(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Basic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, EPropertyBagPropertyType Type, int32& Value)
+void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Basic)
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Generic)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
-	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	P_GET_ENUM(EPropertyBagPropertyType,ParamType);
-	// Read wildcard Value input.
+	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+	P_GET_PROPERTY(FIntProperty, ParamIndex);
+	
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FProperty>(nullptr);
@@ -539,85 +471,19 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Basic)
 	
 	P_FINISH;
 
-	EAA_KISMET_ENSURE(ValueProp != nullptr && ValuePtr != nullptr, "Failed to resolve the Value Property for Get Value Basic");
+	EAA_KISMET_ENSURE(ValueProp != nullptr && ValuePtr != nullptr, "Failed to resolve the Value Property for Get Value Generic");
 	
 	P_NATIVE_BEGIN;
-
-	bool bValidCall = false;
 	
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
-	switch (ParamType)
+	
+	FString Message;
+	if (!ensureAlways(ContextSafe->GetValue(ParamIndex, ValueProp, ValuePtr, &Message)))
 	{
-	case EPropertyBagPropertyType::Bool:
-		bValidCall = ValueProp && ValueProp->IsA(FBoolProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueBool(ParamIndex, *(bool*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Byte:
-		bValidCall = ValueProp && ValueProp->IsA(FByteProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueByte(ParamIndex, *(uint8*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Int32:
-		bValidCall = ValueProp && ValueProp->IsA(FIntProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueInt32(ParamIndex, *(int32*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Int64:
-		bValidCall = ValueProp && ValueProp->IsA(FInt64Property::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueInt64(ParamIndex, *(int64*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Float:
-		bValidCall = ValueProp && ValueProp->IsA(FFloatProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueFloat(ParamIndex, *(float*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Double:
-		bValidCall = ValueProp && ValueProp->IsA(FDoubleProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueDouble(ParamIndex, *(double*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::String:
-		bValidCall = ValueProp && ValueProp->IsA(FStrProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueString(ParamIndex, *(FString*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Name:
-		bValidCall = ValueProp && ValueProp->IsA(FNameProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueName(ParamIndex, *(FName*)ValuePtr);
-		}
-		break;
-	case EPropertyBagPropertyType::Text:
-		bValidCall = ValueProp && ValueProp->IsA(FTextProperty::StaticClass());
-		if (bValidCall)
-		{
-			ContextSafe->GetValueText(ParamIndex, *(FText*)ValuePtr);
-		}
-		break;
-	default:
-		bValidCall = false;
-		break;
+		FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution,  FText::FromString(Message) );
+		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
 	}
-
-	EAA_KISMET_ENSURE(bValidCall, "Unsupported property type the Value for Set Value Basic");
-
+	
 	P_NATIVE_END;
 }
 
@@ -777,23 +643,23 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Array)
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FArrayProperty>(nullptr);
-	void* SrcArrayAddr = Stack.MostRecentPropertyAddress;
+	
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
-	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr);
+	void* ArrayAddr = Stack.MostRecentPropertyAddress;
+	void* ArrayContainerAddr = Stack.MostRecentPropertyContainer;
+	
+	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr && ArrayAddr != nullptr);
 
 	P_FINISH;
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
-	auto ElementType = EAA::Internals::GetValueTypeFromProperty(ArrayProperty->Inner);
-	auto ElementTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ArrayProperty->Inner);
-	
-	const void* PropertyAddress = nullptr;
-	ContextSafe->GetArrayRefForRead(ParamIndex, ElementType, ElementTypeObject, PropertyAddress);
-	if (PropertyAddress)
-	{
-		ArrayProperty->CopyCompleteValueToScriptVM(SrcArrayAddr, PropertyAddress);
-	}
+	auto ValueType = EAA::Internals::GetValueTypeFromProperty(ArrayProperty);
+	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ArrayProperty);
+
+	void* ValuePtr = ArrayProperty->ContainerPtrToValuePtr<void>(ArrayContainerAddr);
+	ensureAlways(ValuePtr == ArrayAddr);
+	ContextSafe->GetValueArray(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
 	P_NATIVE_END;
 }
 
@@ -811,23 +677,22 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Set)
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FSetProperty>(nullptr);
-	void* SrcAddr = Stack.MostRecentPropertyAddress;
+
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
-	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr);
+	void* SetAddr = Stack.MostRecentPropertyAddress;
+	void* SetContainerAddr = Stack.MostRecentPropertyContainer;
+	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
 
 	P_FINISH;
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
-	auto ElementType = EAA::Internals::GetValueTypeFromProperty(SetProperty->ElementProp);
-	auto ElementTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(SetProperty->ElementProp);
-	
-	const void* PropertyAddress = nullptr;
-	ContextSafe->GetSetRefForRead(ParamIndex, ElementType, ElementTypeObject, PropertyAddress);
-	if (PropertyAddress)
-	{
-		SetProperty->CopyCompleteValueToScriptVM(SrcAddr, PropertyAddress);
-	}
+	auto ValueType = EAA::Internals::GetValueTypeFromProperty(SetProperty);
+	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(SetProperty);
+
+	void* ValuePtr = SetProperty->ContainerPtrToValuePtr<void>(SetContainerAddr);
+	ensureAlways(ValuePtr == SetAddr);
+	ContextSafe->GetValueSet(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
 	P_NATIVE_END;
 }
 

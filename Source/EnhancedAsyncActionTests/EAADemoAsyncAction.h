@@ -23,7 +23,7 @@ struct FEAACaptureContext
 	UPROPERTY(BlueprintReadWrite)
 	FString ParamA;
 	UPROPERTY(BlueprintReadWrite)
-	int32 ParamB;
+	int32 ParamB = 0;
 	UPROPERTY(BlueprintReadWrite)
 	TObjectPtr<UObject> ParamC;
 };

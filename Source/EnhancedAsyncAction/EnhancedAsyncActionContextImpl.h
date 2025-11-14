@@ -38,6 +38,9 @@ public:
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Array)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
+	
+	virtual bool SetValue(int32 Index, const FProperty* Property, const void* Value, FString* Error) override { HandleStubCall();return true; }
+	virtual bool GetValue(int32 Index, const FProperty* Property, void* OutValue, FString* Error) override { HandleStubCall();return true; }
 };
 
 /**
@@ -49,6 +52,7 @@ class UE_API FEnhancedAsyncActionContext_PropertyBagBase : public FEnhancedAsync
 {
 	using Super = FEnhancedAsyncActionContext;
 public:
+	virtual ~FEnhancedAsyncActionContext_PropertyBagBase();
 	virtual bool IsValid() const override;
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 
@@ -76,11 +80,13 @@ public:
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
 	
+	virtual bool SetValue(int32 Index, const FProperty* Property, const void* Value, FString* Message) override;
+	virtual bool GetValue(int32 Index, const FProperty* Property, void* OutValue, FString* Error) override;
 protected:
 	inline class FFrieldlyInstancedPropertyBag* GetValueRef() const;
 
 	FInstancedPropertyBag* ValueRef = nullptr;
-	bool ValueConfigured			= false;
+	bool bPropertyBagStructureLocked			= false;
 };
 
 /**
@@ -96,7 +102,6 @@ public:
 
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBagRef"); }
 	virtual bool IsValid() const override;
-	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 protected:
 	TWeakObjectPtr<const UObject> OwnerRef;
 };
@@ -110,10 +115,12 @@ class UE_API FEnhancedAsyncActionContext_PropertyBag : public FEnhancedAsyncActi
 {
 	using Super = FEnhancedAsyncActionContext_PropertyBagBase;
 public:		
-	FEnhancedAsyncActionContext_PropertyBag();
+	FEnhancedAsyncActionContext_PropertyBag(const UObject* OwningObject);
 
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBag"); }
+	virtual bool IsValid() const override;
 protected:
+	TWeakObjectPtr<const UObject> OwnerRef;
 	FInstancedPropertyBag Value;
 };
 

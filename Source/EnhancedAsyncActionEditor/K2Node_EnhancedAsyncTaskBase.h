@@ -137,8 +137,6 @@ public:
 		UEdGraphPin* OutputPin;
 		UK2Node_TemporaryVariable* TempVar;
 
-		//UK2Node_AssignmentStatement* AssignNode = nullptr;
-
 		const FName& GetName() const { return OutputPin->PinName; }
 		const FName& GetCategory() const { return OutputPin->PinType.PinCategory; }
 

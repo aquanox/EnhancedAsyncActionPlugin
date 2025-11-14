@@ -101,7 +101,7 @@ protected:
 
 	FTransactionallySafeCriticalSection MapCriticalSection;
 
-	TMap<TObjectKey<const UObject>, TSharedPtr<FEnhancedAsyncActionContext>> ActionContexts;
+	TMap<const UObject*, TSharedPtr<FEnhancedAsyncActionContext>> ActionContexts;
 
 	int32 InternalIndexCounter = 0;
 };

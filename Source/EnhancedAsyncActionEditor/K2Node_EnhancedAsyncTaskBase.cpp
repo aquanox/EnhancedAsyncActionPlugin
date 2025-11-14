@@ -1164,6 +1164,17 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 
 void UK2Node_EnhancedAsyncTaskBase::ConformDynamicOutputPin(const UEdGraphSchema_K2* Schema, UK2Node_CallFunction* Func, UEdGraphPin* Pin, const FEdGraphPinType& VarType)
 {
+	static const FName MD_GenericParam(TEXT("GenericParam"));
+
+	const FString* GenericParam = Func->GetTargetFunction()->FindMetaData(MD_GenericParam);
+	if (GenericParam &&
+		(!GenericParam->Len() && Pin->GetName() == TEXT("Value") || (Pin->GetName() == *GenericParam))
+	)
+	{
+		Pin->PinType = VarType;
+		return;
+	}
+
 	auto DynamicPin = Func->GetTargetFunction()->FindMetaData(FBlueprintMetadata::MD_DynamicOutputParam);
 	if (DynamicPin && *DynamicPin == Pin->GetName() && Pin->PinType.PinCategory == VarType.PinCategory)
 	{
