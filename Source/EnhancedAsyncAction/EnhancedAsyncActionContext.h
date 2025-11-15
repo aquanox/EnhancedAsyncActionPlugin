@@ -97,6 +97,8 @@ struct UE_API FEnhancedAsyncActionContext
 	virtual ~FEnhancedAsyncActionContext() = default;
 
 	virtual void SetupFromStringDefinition(const FString& InDefinition) {}
+	virtual void SetupFromProperties(TConstArrayView<TPair<FName, const FProperty*>> Properties) {}
+	
 	virtual bool IsValid() const = 0;
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) {}
 
@@ -121,13 +123,17 @@ struct UE_API FEnhancedAsyncActionContext
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
 
-	virtual bool SetValue(int32 Index, const FProperty* Property, const void* Value, FString* Error) =0;
-	virtual bool GetValue(int32 Index, const FProperty* Property, void* OutValue, FString* Error) =0;
+	bool SetValueByIndex(int32 Index, const FProperty* Property, const void* Value, FString& Message);
+	virtual bool SetValueByName(FName Name, const FProperty* Property, const void* Value, FString& Message) =0;
+
+	bool GetValueByIndex(int32 Index, const FProperty* Property, void* OutValue, FString& Message);
+	virtual bool GetValueByName(FName Name, const FProperty* Property, void* OutValue, FString& Message) =0;
+
+	bool CanAddReferencedObjects() const { return bAddReferencedObjectsAllowed; }
+	bool CanSetupContext() const { return bSetupContextAllowed; }
 protected:
-	friend class FEnhancedAsyncActionManager;
 	bool bAddReferencedObjectsAllowed = true;
-	// friend class UEnhancedAsyncActionContextLibrary;
-	// bool bSetupAllowed = true;
+	bool bSetupContextAllowed = true;
 };
 
 // Wrapper over actual context data for blueprints 

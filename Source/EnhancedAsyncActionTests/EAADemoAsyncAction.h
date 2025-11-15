@@ -52,7 +52,7 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FEAADemoResult OnCompleted;
 
-	UFUNCTION(BlueprintCallable, Category="EAA|Demo", DisplayName="LoadStatsForUser (CC)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
+	UFUNCTION(BlueprintCallable, Category="EAA|Demo", DisplayName="Load Stats (External Ctx)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
 	static UEAADemoAsyncActionCapture* StartActionWithCapture(const UObject* WorldContextObject, bool bDirectCall, const int32 UserIndex);
 
 	virtual void Activate() override;
@@ -91,7 +91,7 @@ class UEAADemoAsyncActionCaptureMember : public UEAADemoAsyncActionCapture
 public:
 	UEAADemoAsyncActionCaptureMember();
 
-	UFUNCTION(BlueprintCallable, Category="EAA|Demo",DisplayName="LoadStatsForUser (CCE)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
+	UFUNCTION(BlueprintCallable, Category="EAA|Demo",DisplayName="Load Stats (Embedded Ctx)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
 	static UEAADemoAsyncActionCaptureMember* StartActionWithCaptureFixed(const UObject* WorldContextObject, bool bDirectCall, const int32 UserIndex);
 
 private:

@@ -63,6 +63,14 @@ namespace EAA::Internals
 	 * Note - bound properties still use index and bound property name shown only for UI
 	 */
 	UE_API FName IndexToName(int32 Index);
+	
+	UE_API int32 NameToIndex(const FName& Name);
+	
+	UE_API FName IndexToPinName(int32 Index, bool bInput);
+	UE_API int32 PinNameToIndex(const FName& Name, bool bInput);
+
+	UE_API int32 FindPinIndex(const FName& Name);
+	UE_API FName MirrorPinName(const FName& Name);
 
 	UE_API bool HasAccessorForType(const FPropertyTypeInfo& TypeInfo);
 

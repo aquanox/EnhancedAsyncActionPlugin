@@ -23,7 +23,7 @@ public:
 	 * @param Action Action proxy object
 	 * @return Context handle
 	 */
-	UFUNCTION(BlueprintCallable, Category="EAA|Core", meta=(BlueprintInternalUseOnly=false, AdvancedDisplay=1))
+	UFUNCTION(BlueprintCallable, Category="EAA|Core", meta=(BlueprintInternalUseOnly=true, AdvancedDisplay=1))
 	static UE_API FEnhancedAsyncActionContextHandle CreateContextForObject(const UObject* Action, FName InnerContainerProperty);
 
 	/**
@@ -121,47 +121,52 @@ public:
 
 	// ======== SETTERS [ GENERIC ] ============
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Set Generic Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Set Value Variadic", meta=(Variadic, BlueprintInternalUseOnly=true))
+	static UE_API void Handle_SetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names);
+
+	DECLARE_FUNCTION(execHandle_SetValue_Variadic);
+
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Set Generic Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_SetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Generic);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Enum Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Enum Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_SetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Enum);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Struct Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Struct Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_SetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Struct);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Object Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Object Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_SetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject* Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Object);
 	
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Soft Object Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Soft Object Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_SetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject> Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_SoftObject);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Class Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Class Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_SetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass* Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Class);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Soft Class Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Soft Class Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_SetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject> Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_SoftClass);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Array Value", meta=(BlueprintInternalUseOnly=false, ArrayParm="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Array Value", meta=(BlueprintInternalUseOnly=true, ArrayParm="Value"))
 	static UE_API void Handle_SetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TArray<int32>& Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Array);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Set Value", meta=(BlueprintInternalUseOnly=false, SetParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Setters", DisplayName="Set Set Value", meta=(BlueprintInternalUseOnly=true, SetParam="Value"))
 	static UE_API void Handle_SetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TSet<int32>& Value);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Set);
@@ -197,47 +202,52 @@ public:
 
 	// ========= GETTERS [ GENERIC ] ============
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Generic Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Value Variadic", meta=(Variadic, BlueprintInternalUseOnly=true))
+	static UE_API void Handle_GetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names);
+
+	DECLARE_FUNCTION(execHandle_GetValue_Variadic);
+
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Generic Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Generic);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Enum Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Enum Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_GetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Enum);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Struct Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Struct Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_GetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Struct);
 
-	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Object Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Object Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_GetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject*& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Object);
 	
-	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Soft Object Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Soft Object Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_GetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject>& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_SoftObject);
 	
-	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Class Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Class Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_GetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass*& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Class);
 	
-	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Soft Class Value", meta=(BlueprintInternalUseOnly=false, CustomStructureParam="Value"))
+	UFUNCTION(BlueprintCallable,  CustomThunk, Category="EAA|Getters", DisplayName="Get Soft Class Value", meta=(BlueprintInternalUseOnly=true, CustomStructureParam="Value"))
 	static UE_API void Handle_GetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject>& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_SoftClass);
 	
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Array Value", meta=(BlueprintInternalUseOnly=false, ArrayParm="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Array Value", meta=(BlueprintInternalUseOnly=true, ArrayParm="Value"))
 	static UE_API void Handle_GetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TArray<int32>& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Array);
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Set Value", meta=(BlueprintInternalUseOnly=false, SetParam="Value"))
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EAA|Getters", DisplayName="Get Set Value", meta=(BlueprintInternalUseOnly=true, SetParam="Value"))
 	static UE_API void Handle_GetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSet<int32>& Value);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Set);

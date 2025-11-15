@@ -122,7 +122,7 @@ void FEnhancedAsyncActionManager::AddReferencedObjects(FReferenceCollector& Coll
 	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
 	for (auto It = ActionContexts.CreateIterator(); It; ++It)
 	{
-		if (It->Value->bAddReferencedObjectsAllowed && It->Value->IsValid())
+		if (It->Value->CanAddReferencedObjects() && It->Value->IsValid())
 		{
 			It->Value->AddReferencedObjects(Collector);
 		}

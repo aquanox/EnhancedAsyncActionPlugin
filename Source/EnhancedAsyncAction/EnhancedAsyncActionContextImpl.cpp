@@ -136,12 +136,41 @@ void FEnhancedAsyncActionContext_PropertyBagBase::DebugDump(FStringBuilderBase& 
 	}
 }
 
+void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromProperties(TConstArrayView<TPair<FName, const FProperty*>> Properties)
+{
+	if (bPropertyBagStructureLocked)
+		return;
+	
+	UE_LOG(LogEnhancedAction, Log, TEXT("SetupFromProperties %d"), Properties.Num());
+
+	TArray<FPropertyBagPropertyDesc> Registrations;
+
+	for (const TPair<FName, const FProperty*>& Tuple : Properties)
+	{
+		auto ContainerType = EAA::Internals::GetContainerTypeFromProperty(Tuple.Value);
+		auto ValueType = EAA::Internals::GetValueTypeFromProperty(Tuple.Value);
+		auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(Tuple.Value);
+
+		if (ValueType == EPropertyBagPropertyType::None || ValueType == EPropertyBagPropertyType::Count)
+			continue;
+		// @note: DO NOT USE FPropertyBagPropertyDesc FProperty constructor
+		// Engine GetValueTypeObjectFromProperty is buggy in 5.5 and earlier
+		// there is no need in metadata carry over so can ignore that
+		Registrations.Add(FPropertyBagPropertyDesc(Tuple.Key, ContainerType, ValueType, ValueTypeObject));
+	}
+	
+	GetValueRef()->AddProperties(Registrations);
+
+	bPropertyBagStructureLocked = true;
+	bSetupContextAllowed = false;
+}
+
 void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromStringDefinition(const FString& InDefinition)
 {
-	UE_LOG(LogEnhancedAction, Log, TEXT("SetupFromStringData %s"), *InDefinition);
-
-	if (InDefinition.IsEmpty())
+	if (bPropertyBagStructureLocked)
 		return;
+	
+	UE_LOG(LogEnhancedAction, Log, TEXT("SetupFromStringData %s"), *InDefinition);
 
 	TArray<FString> Splits;
 	InDefinition.ParseIntoArray(Splits, TEXT(";"));
@@ -171,6 +200,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromStringDefinition(cons
 	}
 
 	bPropertyBagStructureLocked = true;
+	bSetupContextAllowed = false;
 }
 
 bool FEnhancedAsyncActionContext_PropertyBagBase::CanAddNewProperty(const FName& Name, EPropertyBagPropertyType Type) const
@@ -572,9 +602,6 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueSet(int32 Index, EProp
 // ============ GENERICS ==============
 // ======================================
 
-
-#define RETURN_GENERIC_FAIL(msg) { if (Message) *Message = TEXT(msg); return false; }
-
 static bool IsContainerProperty(const FProperty* Property)
 {
 	return CastField<FArrayProperty>(Property)
@@ -582,48 +609,102 @@ static bool IsContainerProperty(const FProperty* Property)
 		|| CastField<FMapProperty>(Property);
 }
 
-bool FEnhancedAsyncActionContext_PropertyBagBase::SetValue(int32 Index, const FProperty* Property, const void* Value, FString* Message)
+bool CanCastTo(const UStruct* From, const UStruct* To)
 {
-	if (!Property || !Value || IsContainerProperty(Property))
-		RETURN_GENERIC_FAIL("Bad property");
+	return From != nullptr && To != nullptr && From->IsChildOf(To);
+}
+
+static bool IsCompatibleType(const FPropertyBagPropertyDesc* Descriptor, const FProperty* Property)
+{
+	auto ContainerType = EAA::Internals::GetContainerTypeFromProperty(Property);
+	if (ContainerType != Descriptor->ContainerTypes.GetFirstContainerType())
+		return false;
+
+	auto ValueType = EAA::Internals::GetValueTypeFromProperty(Property);
+	if (ValueType != Descriptor->ValueType)
+		return false;
+
+	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(Property);
+
+	if (ValueType == EPropertyBagPropertyType::Enum || ValueType == EPropertyBagPropertyType::Struct)
+	{
+		return ValueTypeObject == Descriptor->ValueTypeObject; 
+	}
+
+	if (ValueType == EPropertyBagPropertyType::Object)
+	{
+		const UClass* ObjectClass = Cast<const UClass>(ValueTypeObject);
+		const UClass* DescriptorObjectClass = Cast<const UClass>(Descriptor->ValueTypeObject);
+		return CanCastTo(ObjectClass, DescriptorObjectClass);
+	}
 	
-	const FName Name = EAA::Internals::IndexToName(Index);
-	
+	return true;
+}
+
+bool FEnhancedAsyncActionContext_PropertyBagBase::SetValueByName(FName Name, const FProperty* Property, const void* Value, FString& Message)
+{
+	if (!Property || Name.IsNone() || !Value)
+	{
+		Message = TEXT("Bad property");
+		return false;
+	}
+
 	const FPropertyBagPropertyDesc* ContextProperty = GetValueRef()->FindPropertyDescByName(Name);
-	if (!ContextProperty && !bPropertyBagStructureLocked)
-	{ // structure is not locked - free to add new property
-		GetValueRef()->AddProperty(Name, Property);
-		ContextProperty = GetValueRef()->FindPropertyDescByName(Name);
+	if (!ContextProperty)
+	{
+		if (ensureAlways(!bPropertyBagStructureLocked))
+		{
+			// structure is not locked - free to add new property
+			GetValueRef()->AddProperty(Name, Property);
+			ContextProperty = GetValueRef()->FindPropertyDescByName(Name);
+		}
 	}
 	if (!ContextProperty || !ContextProperty->CachedProperty)
-		RETURN_GENERIC_FAIL("Unknown context property");
-	if (!ContextProperty->CompatibleType(FPropertyBagPropertyDesc(Name, Property)))
-		RETURN_GENERIC_FAIL("Incompatible type");
+	{
+		Message = TEXT("Unknown context property");
+		return false;
+	}
+	if (!IsCompatibleType(ContextProperty, Property))
+	{
+		Message = TEXT("Incompatible type");
+		return false;
+	}
 	void* ContextValueAddress = GetValueRef()->GetMutableValueAddress(ContextProperty);
 	if (!ContextValueAddress)
-		RETURN_GENERIC_FAIL("Missing context property data");
+	{
+		Message = TEXT("Missing context property data");
+		return false;
+	}
 
 	Property->CopyCompleteValueFromScriptVM(ContextValueAddress, Value);
 	return true;
 }
 
-bool FEnhancedAsyncActionContext_PropertyBagBase::GetValue(int32 Index, const FProperty* Property, void* OutValue, FString* Message)
+bool FEnhancedAsyncActionContext_PropertyBagBase::GetValueByName(FName Name, const FProperty* Property, void* OutValue, FString& Message)
 {
-	if (!Property || !OutValue || IsContainerProperty(Property))
+	if (!Property || Name.IsNone() || !OutValue)
 	{
-		RETURN_GENERIC_FAIL("Bad property");
+		Message = TEXT("Bad property");
+		return false;
 	}
-	
-	const FName Name = EAA::Internals::IndexToName(Index);
-	
+
 	const FPropertyBagPropertyDesc* ContextProperty = GetValueRef()->FindPropertyDescByName(Name);
 	if (!ContextProperty || !ContextProperty->CachedProperty)
-		RETURN_GENERIC_FAIL("Unknown context property");
+	{
+		Message = TEXT("Unknown context property");
+		return false;
+	}
 	if (!ContextProperty->CompatibleType(FPropertyBagPropertyDesc(Name, Property)))
-		RETURN_GENERIC_FAIL("Incompatible type");
+	{
+		Message = TEXT("Incompatible type");
+		return false;
+	}
 	const void* ContextValueAddress = GetValueRef()->GetValueAddress(ContextProperty);
 	if (!ContextValueAddress)
-		RETURN_GENERIC_FAIL("Missing context property data");
+	{
+		Message = TEXT("Missing context property data");
+		return false;
+	}
 
 	Property->CopyCompleteValueToScriptVM(OutValue, ContextValueAddress);
 	return true;

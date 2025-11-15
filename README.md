@@ -153,16 +153,35 @@ With no limits to amount of data to capture
     - Assign value to a created local variable
     - Continue Execution from Event Pin
 
+**Variadic Async Action Flow**
+
+- Call `ProxyFactory::ProxyFactoryFunction` to create new `ProxyClass` instance
+- Call `CreateContextForObject` to create bound context for the proxy object
+- Call `SetValueVariadic` to write captures values to storage (pin per captured property)
+- For each multicast delegate in node:
+  - Create Custom Event
+  - Call Add Delegate and subscribe to event
+  - Call `ProxyClass::Activate`
+  - Continue Execution from Then Pin
+- For each Custom Event:
+  - Call `GetContextForObject` to acquire context for proxy object
+  - Call `GetValueVariadic` to read captured values from storage (pin per captured property)
+    - Assign value to a created local variable
+  - For each multicast delegate parameter:
+    - Assign value to a created local variable
+    - Continue Execution from Event Pin
+
 Context created only if there is at least one capture pin connected.
 
 ## TODOS
 
 - Write some tests
+- Optimize graph updates on actions
 - Latent functions support
 - Maps support (has to wait for UE 5.8)
 - Improve error handling
 - Experiment with direct container access (make a FInstancedPropertyBag member required, since condition already requires editing and StructUtils part of UE Core)
-- Experiment with optimizing generated graph nodes
+- Experiment with optimizing generated graph nodes (variadic does it great)
 - Better handling of malformed or changed nodes (there are lots of debug asserts right now)
 
 ## Unreal Engine Versions

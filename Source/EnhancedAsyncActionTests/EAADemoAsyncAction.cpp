@@ -52,11 +52,7 @@ void UEAADemoAsyncActionCapture::InvokePayload()
 
 UEAADemoAsyncActionCaptureMember::UEAADemoAsyncActionCaptureMember()
 {
-	ContextData.AddProperties({
-		FPropertyBagPropertyDesc { TEXT("foo"), EPropertyBagPropertyType::Int32 },
-		FPropertyBagPropertyDesc { TEXT("bar"), EPropertyBagPropertyType::Enum, StaticEnum<EPropertyBagPropertyType>() },
-		FPropertyBagPropertyDesc { TEXT("baz"), EPropertyBagPropertyType::String },
-	});
+
 }
 
 UEAADemoAsyncActionCaptureMember* UEAADemoAsyncActionCaptureMember::StartActionWithCaptureFixed(const UObject* WorldContextObject,  bool bDirectCall, const int32 UserIndex)

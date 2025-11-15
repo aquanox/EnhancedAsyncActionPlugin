@@ -146,6 +146,16 @@ FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagContainerType Container, EPrope
 {
 }
 
+bool FEnhancedAsyncActionContext::SetValueByIndex(int32 Index, const FProperty* Property, const void* Value, FString& Message)
+{
+	return SetValueByName(EAA::Internals::IndexToName(Index), Property, Value, Message);
+}
+
+bool FEnhancedAsyncActionContext::GetValueByIndex(int32 Index, const FProperty* Property, void* OutValue, FString& Message)
+{
+	return GetValueByName(EAA::Internals::IndexToName(Index), Property, OutValue, Message);
+}
+
 FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(UObject* InOwner, TSharedRef<FEnhancedAsyncActionContext> Ctx)
 	: Owner(InOwner), Data(Ctx)
 {

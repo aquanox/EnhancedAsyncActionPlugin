@@ -169,6 +169,66 @@ void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Text(const FEnhancedAsy
 	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueText(Index, Value);
 }
 
+void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names)
+{
+	checkNoEntry();
+}
+
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Variadic)
+{
+	// Read the standard function arguments
+	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+	P_GET_TARRAY_REF(FString, Parameters);
+
+	struct FInputParam { int32 Index; FName Name; const FProperty* Property; const void* Value;  };
+	TArray<FInputParam, TInlineAllocator<16>> VarInputs;
+	TArray<TPair<FName, const FProperty*>, TInlineAllocator<16>> SetupInputs;
+
+	// Read the input values
+	for (int32 Index = 0; Index < Parameters.Num(); ++Index)
+	{
+		const FString& InputName = Parameters[Index];
+		
+		Stack.MostRecentProperty = nullptr;
+		Stack.MostRecentPropertyAddress = nullptr;
+		Stack.StepCompiledIn<FProperty>(nullptr);
+		check(Stack.MostRecentProperty && Stack.MostRecentPropertyAddress);
+
+		FInputParam& Input = VarInputs.AddDefaulted_GetRef();
+		Input.Name = *InputName;
+		Input.Index = EAA::Internals::NameToIndex(Input.Name);
+		Input.Property = Stack.MostRecentProperty;
+		Input.Value = Stack.MostRecentPropertyAddress;
+
+		SetupInputs.Emplace(Input.Name, Input.Property);
+	}
+
+	P_FINISH;
+
+	P_NATIVE_BEGIN;
+	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	if (ContextSafe->CanSetupContext())
+	{
+		ContextSafe->SetupFromProperties(SetupInputs);
+	}
+	
+	for (const FInputParam& Input : VarInputs)
+	{
+		FString Message;
+		if (!ensureAlways(ContextSafe->SetValueByName(Input.Name, Input.Property, Input.Value, Message)))
+		{
+			auto PropertyContainerString = UEnum::GetValueAsString(EAA::Internals::GetContainerTypeFromProperty(Input.Property));
+			auto PropertyTypeString = UEnum::GetValueAsString(EAA::Internals::GetValueTypeFromProperty(Input.Property));
+			FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution, FText::FromString(
+				FString::Printf(TEXT("Failed to set context property at index %d (%s:%s) : %s"),
+					Input.Index, *PropertyContainerString, *PropertyTypeString, *Message )
+			) );
+			FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
+		}
+	}
+	P_NATIVE_END;
+}
+
 void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
@@ -195,7 +255,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Generic)
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 
 	FString Message;
-	if (!ensureAlways(ContextSafe->SetValue(ParamIndex, ValueProp, ValuePtr, &Message)))
+	if (!ensureAlways(ContextSafe->SetValueByIndex(ParamIndex, ValueProp, ValuePtr, Message)))
 	{
 		FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution,  FText::FromString(Message) );
 		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
@@ -356,10 +416,9 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Array)
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
 	const void* ArrayAddr = Stack.MostRecentPropertyAddress;
 	const void* ArrayContainerAddr = Stack.MostRecentPropertyContainer;
+	P_FINISH;
 
 	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr && ArrayAddr != nullptr);
-
-	P_FINISH;
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
@@ -389,9 +448,9 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
 	const void* SetAddr = Stack.MostRecentPropertyAddress;
 	const void* SetContainerAddr = Stack.MostRecentPropertyContainer;
-	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
-
 	P_FINISH;
+	
+	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
@@ -451,9 +510,62 @@ void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Text(const FEnhancedAsy
 	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueText(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names)
 {
 	checkNoEntry();
+}
+
+DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Variadic)
+{
+	// Read the standard function arguments
+    P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+    P_GET_TARRAY_REF(FString, Parameters);
+
+    struct FOutputParam { int32 Index; FName Name; const FProperty* Property; void* Value;  };
+    TArray<FOutputParam, TInlineAllocator<16>> VarOutputs;
+
+    // Read the input values and write them to the Python context
+    bool bHasValidInputValues = true;
+    for (int32 Index = 0; Index < Parameters.Num(); ++Index)
+    {
+    	const FString& InputName = Parameters[Index];
+    	
+    	Stack.MostRecentProperty = nullptr;
+    	Stack.MostRecentPropertyAddress = nullptr;
+    	Stack.StepCompiledIn<FProperty>(nullptr);
+    	check(Stack.MostRecentProperty && Stack.MostRecentPropertyAddress);
+
+    	FOutputParam& Output = VarOutputs.AddDefaulted_GetRef();
+    	Output.Name = *InputName;
+    	Output.Index = EAA::Internals::NameToIndex(Output.Name);
+    	Output.Property = Stack.MostRecentProperty;
+    	Output.Value = Stack.MostRecentPropertyAddress;
+    }
+
+    P_FINISH;
+
+    P_NATIVE_BEGIN;
+    auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	for (const FOutputParam& Input : VarOutputs)
+	{
+		FString Message;
+		if (!ensureAlways(ContextSafe->GetValueByName(Input.Name, Input.Property, Input.Value, Message)))
+		{
+			auto PropertyContainerString = UEnum::GetValueAsString(EAA::Internals::GetContainerTypeFromProperty(Input.Property));
+			auto PropertyTypeString = UEnum::GetValueAsString(EAA::Internals::GetValueTypeFromProperty(Input.Property));
+			FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution, FText::FromString(
+				FString::Printf(TEXT("Failed to get context property at index %d (%s:%s) : %s"),
+					Input.Index, *PropertyContainerString, *PropertyTypeString, *Message )
+			) );
+			FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
+		}
+	}
+    P_NATIVE_END;
+}
+
+void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+{
+	
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Generic)
@@ -477,7 +589,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Generic)
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	
 	FString Message;
-	if (!ensureAlways(ContextSafe->GetValue(ParamIndex, ValueProp, ValuePtr, &Message)))
+	if (!ensureAlways(ContextSafe->GetValueByIndex(ParamIndex, ValueProp, ValuePtr, Message)))
 	{
 		FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution,  FText::FromString(Message) );
 		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
@@ -646,10 +758,9 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Array)
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
 	void* ArrayAddr = Stack.MostRecentPropertyAddress;
 	void* ArrayContainerAddr = Stack.MostRecentPropertyContainer;
+	P_FINISH;
 	
 	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr && ArrayAddr != nullptr);
-
-	P_FINISH;
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
@@ -680,9 +791,9 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Set)
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
 	void* SetAddr = Stack.MostRecentPropertyAddress;
 	void* SetContainerAddr = Stack.MostRecentPropertyContainer;
-	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
-
 	P_FINISH;
+
+	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);

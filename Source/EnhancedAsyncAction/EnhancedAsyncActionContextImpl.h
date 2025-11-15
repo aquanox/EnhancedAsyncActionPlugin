@@ -38,9 +38,9 @@ public:
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Array)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
-	
-	virtual bool SetValue(int32 Index, const FProperty* Property, const void* Value, FString* Error) override { HandleStubCall();return true; }
-	virtual bool GetValue(int32 Index, const FProperty* Property, void* OutValue, FString* Error) override { HandleStubCall();return true; }
+
+	virtual bool SetValueByName(FName Name, const FProperty* Property, const void* Value, FString& Message) override { HandleStubCall();return true; }
+	virtual bool GetValueByName(FName Name, const FProperty* Property, void* OutValue, FString& Message) override { HandleStubCall();return true; }
 };
 
 /**
@@ -59,8 +59,9 @@ public:
 	virtual FString GetDebugName() const { return TEXT("FEnhancedAsyncActionContext_PropertyBagBase"); }
 	virtual void DebugDump(FStringBuilderBase& Builder) const override;
 
+	virtual void SetupFromProperties(TConstArrayView<TPair<FName, const FProperty*>> Properties) override;
 	virtual void SetupFromStringDefinition(const FString& InDefinition) override;
-	virtual bool CanAddNewProperty(const FName& Name, EPropertyBagPropertyType Type) const;
+	bool CanAddNewProperty(const FName& Name, EPropertyBagPropertyType Type) const;
 
 #define CONTEXT_PROPERTY_ACCESSOR_MODE override
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Bool, bool)
@@ -79,9 +80,9 @@ public:
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Array)
 	CONTEXT_DECLARE_CONTAINER_ACCESSOR(Set)
 #undef CONTEXT_PROPERTY_ACCESSOR_MODE
-	
-	virtual bool SetValue(int32 Index, const FProperty* Property, const void* Value, FString* Message) override;
-	virtual bool GetValue(int32 Index, const FProperty* Property, void* OutValue, FString* Error) override;
+
+	virtual bool SetValueByName(FName Name, const FProperty* Property, const void* Value, FString& Message) override;
+	virtual bool GetValueByName(FName Name, const FProperty* Property, void* OutValue, FString& Message) override;
 protected:
 	inline class FFrieldlyInstancedPropertyBag* GetValueRef() const;
 

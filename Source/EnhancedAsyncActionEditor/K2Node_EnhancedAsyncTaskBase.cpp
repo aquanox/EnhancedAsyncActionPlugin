@@ -20,6 +20,7 @@
 #include "K2Node_CustomEvent.h"
 #include "EnhancedAsyncActionPrivate.h"
 #include "K2Node_CallArrayFunction.h"
+#include "K2Node_MakeArray.h"
 #include "StructUtils/PropertyBag.h"
 #include "ToolMenu.h"
 
@@ -38,6 +39,14 @@ namespace EAA::Switches
 
 	// debug tooltip
 	constexpr bool bDebugTooltips = true;
+
+	// @experiment variadic set/get
+	constexpr bool bVariadicGetSet = true;
+
+	// TODO: @experiment skip setting not linked outputs toggle
+	constexpr bool bSkipUnusedInputs = true;
+	// TODO: @experiment skip setting not linked outputs toggle
+	constexpr bool bSkipUnusedOutputs = true;
 }
 
 UK2Node_EnhancedAsyncTaskBase::UK2Node_EnhancedAsyncTaskBase()
@@ -64,8 +73,8 @@ void UK2Node_EnhancedAsyncTaskBase::GetNodeContextMenuActions(UToolMenu* Menu, U
 		FToolMenuSection& Section = Menu->FindOrAddSection(NodeSection, NodeSectionDesc);
 		Section.AddMenuEntry(
 			"RemovePin",
-			LOCTEXT("RemovePin", "Remove pin"),
-			LOCTEXT("RemovePinTooltip", "Remove this capture pin"),
+			LOCTEXT("RemovePin", "Remove capture pin"),
+			LOCTEXT("RemovePinTooltip", "Remove selected capture pin"),
 			FSlateIcon(),
 			FUIAction(
 				FExecuteAction::CreateUObject(MutableThis, &ThisClass::RemoveInputPin, MutablePin)
@@ -77,8 +86,8 @@ void UK2Node_EnhancedAsyncTaskBase::GetNodeContextMenuActions(UToolMenu* Menu, U
 		FToolMenuSection& Section = Menu->FindOrAddSection(NodeSection, NodeSectionDesc);
 		Section.AddMenuEntry(
 			"AddPin",
-			LOCTEXT("AddPin", "Add pin"),
-			LOCTEXT("AddPinTooltip", "Add another capture pin pair"),
+			LOCTEXT("AddPin", "Add capture pin"),
+			LOCTEXT("AddPinTooltip", "Add capture pin pair"),
 			FSlateIcon(),
 			FUIAction(
 				FExecuteAction::CreateUObject(MutableThis, &ThisClass::AddInputPin)
@@ -94,7 +103,7 @@ void UK2Node_EnhancedAsyncTaskBase::GetNodeContextMenuActions(UToolMenu* Menu, U
 			LOCTEXT("UnlinkAllCaptureTooltip", "Unlink all capture pins"),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateUObject(MutableThis, &ThisClass::UnlinkAllDynamicPins)
+				FExecuteAction::CreateUObject(MutableThis, &ThisClass::UnlinkAllCapturePins)
 			)
 		);
 		Section.AddMenuEntry(
@@ -103,7 +112,7 @@ void UK2Node_EnhancedAsyncTaskBase::GetNodeContextMenuActions(UToolMenu* Menu, U
 			LOCTEXT("RemoveAllCaptureTooltip", "Remove all capture pins"),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateUObject(MutableThis, &ThisClass::RemoveAllDynamicPins)
+				FExecuteAction::CreateUObject(MutableThis, &ThisClass::RemoveAllCapturePins)
 			)
 		);
 	}
@@ -197,29 +206,21 @@ void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultPins()
 
 	Captures.Empty();
 
-	const UScriptStruct* Skeleton = nullptr;
-	if (HasDefaultDynamicPins(Skeleton))
+	for (int32 Index = 0; Index < NumCaptures; ++Index)
 	{
-		AllocateDefaultCapturePinsForStruct(Skeleton);
-	}
-	else
-	{
-		for (int32 Index = 0; Index < NumCaptures; ++Index)
-		{
-			auto In = CreatePin(EEdGraphPinDirection::EGPD_Input,
-								   UEdGraphSchema_K2::PC_Wildcard,
-								   GetPinName(EEdGraphPinDirection::EGPD_Input, Index)
-			);
-			In->SourceIndex = Index;
-			In->bDefaultValueIsIgnored = true;
-			auto Out = CreatePin(EEdGraphPinDirection::EGPD_Output,
-									UEdGraphSchema_K2::PC_Wildcard,
-									GetPinName(EEdGraphPinDirection::EGPD_Output, Index)
-			);
-			Out->SourceIndex = Index;
+		auto In = CreatePin(EEdGraphPinDirection::EGPD_Input,
+		                    UEdGraphSchema_K2::PC_Wildcard,
+		                    GetCapturePinName(EEdGraphPinDirection::EGPD_Input, Index)
+		);
+		In->SourceIndex = Index;
+		In->bDefaultValueIsIgnored = true;
+		auto Out = CreatePin(EEdGraphPinDirection::EGPD_Output,
+		                     UEdGraphSchema_K2::PC_Wildcard,
+		                     GetCapturePinName(EEdGraphPinDirection::EGPD_Output, Index)
+		);
+		Out->SourceIndex = Index;
 
-			Captures.Add(FEATCapturePinPair(Index, In, Out));
-		}
+		Captures.Add(FEATCapturePinPair(Index, In, Out));
 	}
 }
 
@@ -233,14 +234,14 @@ void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultCapturePinsForStruct(const US
 		const FProperty* Property = *PropertyIt;
 		if (!Property->HasAnyPropertyFlags(CPF_BlueprintVisible)) continue;
 
-		auto In = CreatePin(EEdGraphPinDirection::EGPD_Input, NAME_None, GetPinName(EEdGraphPinDirection::EGPD_Input, Index) );
+		auto In = CreatePin(EEdGraphPinDirection::EGPD_Input, NAME_None, GetCapturePinName(EEdGraphPinDirection::EGPD_Input, Index) );
 		In->SourceIndex = Index;
 		In->bDefaultValueIsIgnored = true;
 		In->PinToolTip = Property->GetToolTipText().ToString();
 		In->PinFriendlyName = Property->GetDisplayNameText();
 		bool bInGood = Schema->ConvertPropertyToPinType(Property, /*out*/ In->PinType);
 
-		auto Out = CreatePin(EEdGraphPinDirection::EGPD_Output, NAME_None, GetPinName(EEdGraphPinDirection::EGPD_Output, Index) );
+		auto Out = CreatePin(EEdGraphPinDirection::EGPD_Output, NAME_None, GetCapturePinName(EEdGraphPinDirection::EGPD_Output, Index) );
 		Out->SourceIndex = Index;
 		Out->PinToolTip = Property->GetToolTipText().ToString();
 		Out->PinFriendlyName = Property->GetDisplayNameText();
@@ -257,15 +258,15 @@ void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultCapturePinsForStruct(const US
 
 bool UK2Node_EnhancedAsyncTaskBase::HasAnyLinkedCaptures() const
 {
-	if (!NumCaptures) return false;
+	ensure(Captures.Num() == NumCaptures);
 	
 	for (int32 Index = 0; Index < NumCaptures; ++Index)
 	{
-		auto InPin = FindDynamicPin(EGPD_Input, Index);
+		UEdGraphPin* InPin = FindCapturePin(EGPD_Input, Index);
 		if (InPin && InPin->LinkedTo.Num())
 			return true;
 
-		auto OutPin = FindDynamicPin(EGPD_Output, Index);
+		UEdGraphPin* OutPin = FindCapturePin(EGPD_Output, Index);
 		if (OutPin && OutPin->LinkedTo.Num())
 			return true;
 	}
@@ -278,45 +279,18 @@ bool UK2Node_EnhancedAsyncTaskBase::HasContextExposed() const
 	return bExposeContextParameter;
 }
 
-bool UK2Node_EnhancedAsyncTaskBase::NeedSetupCaptureContext() const
-{
-	return HasAnyCapturePins() && EAA::Switches::bWithSetupContext;
-}
-
 TArray<UEdGraphPin*> UK2Node_EnhancedAsyncTaskBase::GetStandardPins(EEdGraphPinDirection Dir) const
 {
 	TArray<UEdGraphPin*>  Result;
 	Result.Reserve(Pins.Num());
-	for (auto& Pin : Pins)
+	for (UEdGraphPin* const Pin : Pins)
 	{
-		if (Pin->Direction == Dir && !IsDynamicPin(Pin))
+		if (Pin->Direction == Dir && !IsCapturePin(Pin))
 		{
 			Result.Add(Pin);
 		}
 	}
 	return Result;
-}
-
-bool UK2Node_EnhancedAsyncTaskBase::HasDefaultDynamicPins(const UScriptStruct*& Skeleton) const
-{
-	if (!AsyncContextContainerProperty.IsNone())
-	{
-		auto* MemberProperty = CastField<FStructProperty>(ProxyClass->FindPropertyByName(AsyncContextContainerProperty));
-		check(MemberProperty);
-		auto* ProxyCDO = ProxyClass->GetDefaultObject();
-
-		if (MemberProperty->Struct->IsChildOf(FInstancedPropertyBag::StaticStruct()))
-		{ // Property bag
-			auto* Value = MemberProperty->ContainerPtrToValuePtrForDefaults<FInstancedPropertyBag>(ProxyClass, ProxyCDO);
-			Skeleton = Value->GetPropertyBagStruct();
-		}
-		else
-		{ // arbitrary struct
-			Skeleton = MemberProperty->Struct;
-		}
-	}
-
-	return false;
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::IsDynamicContainerType() const
@@ -325,12 +299,18 @@ bool UK2Node_EnhancedAsyncTaskBase::IsDynamicContainerType() const
 		|| AsyncContextContainerType->IsChildOf(FInstancedPropertyBag::StaticStruct());
 }
 
-FName UK2Node_EnhancedAsyncTaskBase::GetPinName(EEdGraphPinDirection Dir, int32 PinIndex) const
+FName UK2Node_EnhancedAsyncTaskBase::GetCapturePinName(EEdGraphPinDirection Dir, int32 PinIndex) const
 {
 	if (Dir == EGPD_Input)
-		return *FString::Printf(TEXT("In[%d]"), PinIndex);
+	{
+		// return *FString::Printf(TEXT("In[%d]"), PinIndex);
+		return EAA::Internals::IndexToPinName(PinIndex, true);
+	}
 	else
-		return *FString::Printf(TEXT("Out[%d]"), PinIndex);
+	{
+		// return *FString::Printf(TEXT("Out[%d]"), PinIndex);
+		return EAA::Internals::IndexToPinName(PinIndex, false);
+	}
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::IsContextPin(const UEdGraphPin* Pin) const
@@ -342,12 +322,12 @@ bool UK2Node_EnhancedAsyncTaskBase::IsContextPin(const UEdGraphPin* Pin) const
 
 bool UK2Node_EnhancedAsyncTaskBase::CanSplitPin(const UEdGraphPin* Pin) const
 {
-	return Super::CanSplitPin(Pin) && !IsDynamicPin(Pin);
+	return Super::CanSplitPin(Pin) && !IsCapturePin(Pin);
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::IsConnectionDisallowed(const UEdGraphPin* MyPin, const UEdGraphPin* OtherPin, FString& OutReason) const
 {
-	if (IsDynamicPin(MyPin) && OtherPin)
+	if (IsCapturePin(MyPin) && OtherPin)
 	{
 		if (OtherPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec
 		 || OtherPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Delegate)
@@ -374,7 +354,7 @@ void UK2Node_EnhancedAsyncTaskBase::SyncPinNames()
 		check(CurrentPin);
 		
 		const FName OldName = CurrentPin->PinName;
-		const FName ElementName = GetPinName(CurrentPin->Direction, CurrentIndex);
+		const FName ElementName = GetCapturePinName(CurrentPin->Direction, CurrentIndex);
 
 		CurrentPin->Modify();
 		CurrentPin->PinName = ElementName;
@@ -387,7 +367,7 @@ void UK2Node_EnhancedAsyncTaskBase::SyncPinNames()
 		for (UEdGraphPin* Pin : Pins)
 		{
 			auto& Target = Pin->Direction == EGPD_Input ? InPins : OutPins;
-			if (IsDynamicPin(Pin))
+			if (IsCapturePin(Pin))
 			{
 				Target.Add(Pin);
 			}
@@ -417,9 +397,9 @@ void UK2Node_EnhancedAsyncTaskBase::SyncPinNames()
 			
 			UEdGraphPin* InPin = CaptureInfo.FindPinChecked(EGPD_Input, this);
 			UEdGraphPin* OutPin = CaptureInfo.FindPinChecked(EGPD_Output, this);
-			
-			SyncPin( InPin, Index);
-			SyncPin( OutPin, Index);
+
+			SyncPin(InPin, Index);
+			SyncPin(OutPin, Index);
 
 			CaptureInfo.Index = Index;
 			CaptureInfo.InputPinName = InPin->PinName;
@@ -432,21 +412,21 @@ void UK2Node_EnhancedAsyncTaskBase::SyncPinTypes()
 {
 	for (int32 PinIndex = 0; PinIndex < NumCaptures; ++PinIndex)
 	{
-		SynchronizeArgumentPinType(FindDynamicPin(EGPD_Input, PinIndex));
+		SynchronizeArgumentPinType(FindCapturePin(EGPD_Input, PinIndex));
 	}
 }
 
-UEdGraphPin* UK2Node_EnhancedAsyncTaskBase::FindDynamicPin(EEdGraphPinDirection Dir, int32 PinIndex) const
+UEdGraphPin* UK2Node_EnhancedAsyncTaskBase::FindCapturePin(EEdGraphPinDirection Dir, int32 PinIndex) const
 {
 	if (!EAA::Switches::bRelyOnArray)
 	{
 		ensure(PinIndex < NumCaptures);
-		return FindPin(GetPinName(Dir, PinIndex), Dir);
+		return FindPin(GetCapturePinName(Dir, PinIndex), Dir);
 	}
 	else
 	{
 		ensure(Captures.IsValidIndex(PinIndex));
-		ensure(Captures[PinIndex].NameOf(Dir) == GetPinName(Dir, PinIndex));
+		ensure(Captures[PinIndex].NameOf(Dir) == GetCapturePinName(Dir, PinIndex));
 		return Captures[PinIndex].FindPin(Dir, this);
 	}
 }
@@ -474,12 +454,7 @@ UEdGraphPin* UK2Node_EnhancedAsyncTaskBase::FindMatchingPin(const UEdGraphPin* P
 	}
 }
 
-UEdGraphPin* UK2Node_EnhancedAsyncTaskBase::FindMatchingPin(const UEdGraphPin* Pin) const
-{
-	return FindMatchingPin(Pin, Pin->Direction == EGPD_Input ? EGPD_Output : EGPD_Input);
-}
-
-bool UK2Node_EnhancedAsyncTaskBase::IsDynamicPin(const UEdGraphPin* Pin) const
+bool UK2Node_EnhancedAsyncTaskBase::IsCapturePin(const UEdGraphPin* Pin) const
 {
 	// dynamic pins never split
 	if (Pin->ParentPin != nullptr || Pin->bOrphanedPin) return false;
@@ -517,15 +492,15 @@ void UK2Node_EnhancedAsyncTaskBase::AddInputPin()
 
 	auto In = CreatePin(EEdGraphPinDirection::EGPD_Input,
 						   UEdGraphSchema_K2::PC_Wildcard,
-						   GetPinName(EEdGraphPinDirection::EGPD_Input, Index)
+						   GetCapturePinName(EEdGraphPinDirection::EGPD_Input, Index)
 	);
 	In->bDefaultValueIsIgnored = true;
 	auto Out = CreatePin(EEdGraphPinDirection::EGPD_Output,
 							UEdGraphSchema_K2::PC_Wildcard,
-							GetPinName(EEdGraphPinDirection::EGPD_Output, Index)
+							GetCapturePinName(EEdGraphPinDirection::EGPD_Output, Index)
 	);
 	
-	Captures.Add(FEATCapturePinPair(Index, In, Out));
+	Captures.Add(FEATCapturePinPair(Index, NAME_None, In, Out));
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
 }
@@ -535,7 +510,7 @@ bool UK2Node_EnhancedAsyncTaskBase::CanRemovePin(const UEdGraphPin* Pin) const
 	return IsDynamicContainerType()
 		&& Pin
 		&& HasAnyCapturePins()
-		&& IsDynamicPin(Pin);
+		&& IsCapturePin(Pin);
 }
 
 void UK2Node_EnhancedAsyncTaskBase::RemoveInputPin(UEdGraphPin* Pin)
@@ -544,7 +519,7 @@ void UK2Node_EnhancedAsyncTaskBase::RemoveInputPin(UEdGraphPin* Pin)
 	check(Pin->ParentPin == nullptr);
 	checkSlow(Pins.Contains(Pin));
 
-	if (!IsDynamicPin(Pin))
+	if (!IsCapturePin(Pin))
 		 return;
 
 	FScopedTransaction Transaction(LOCTEXT("RemovePinTx", "RemovePin"));
@@ -588,23 +563,23 @@ void UK2Node_EnhancedAsyncTaskBase::RemoveInputPin(UEdGraphPin* Pin)
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
 }
 
-void UK2Node_EnhancedAsyncTaskBase::UnlinkAllDynamicPins()
+void UK2Node_EnhancedAsyncTaskBase::UnlinkAllCapturePins()
 {
 	const FEdGraphPinType WildcardPinType(UEdGraphSchema_K2::PC_Wildcard, NAME_None, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
 
-	FScopedTransaction Transaction(LOCTEXT("UnlinkAllDynamicPinsTx", "UnlinkAllDynamicPins"));
+	FScopedTransaction Transaction(LOCTEXT("UnlinkAllDynamicPinsTx", "UnlinkAllCapturePins"));
 	Modify();
 	
 	for (int32 Index = 0; Index < NumCaptures; ++Index)
 	{
-		auto InPin = FindDynamicPin(EGPD_Input, Index);
+		auto InPin = FindCapturePin(EGPD_Input, Index);
 		if (ensure(InPin))
 		{
 			InPin->BreakAllPinLinks(true);
 			InPin->PinType = WildcardPinType;
 		}
 
-		auto OutPin = FindDynamicPin(EGPD_Output, Index);
+		auto OutPin = FindCapturePin(EGPD_Output, Index);
 		if (ensure(OutPin))
 		{
 			OutPin->BreakAllPinLinks(true);
@@ -617,9 +592,9 @@ void UK2Node_EnhancedAsyncTaskBase::UnlinkAllDynamicPins()
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
 }
 
-void UK2Node_EnhancedAsyncTaskBase::RemoveAllDynamicPins()
+void UK2Node_EnhancedAsyncTaskBase::RemoveAllCapturePins()
 {
-	FScopedTransaction Transaction(LOCTEXT("RemoveAllDynamicPinsTx", "RemoveAllDynamicPins"));
+	FScopedTransaction Transaction(LOCTEXT("RemoveAllDynamicPinsTx", "RemoveAllCapturePins"));
 	Modify();
 
 	TFunction<void(UEdGraphPin*)> RemovePinLambda = [this, &RemovePinLambda](UEdGraphPin* PinToRemove)
@@ -639,8 +614,8 @@ void UK2Node_EnhancedAsyncTaskBase::RemoveAllDynamicPins()
 
 	for (int Index = NumCaptures - 1; Index >= 0; --Index)
 	{
-		RemovePinLambda(FindDynamicPin(EGPD_Input, Index));
-		RemovePinLambda(FindDynamicPin(EGPD_Output, Index));
+		RemovePinLambda(FindCapturePin(EGPD_Input, Index));
+		RemovePinLambda(FindCapturePin(EGPD_Output, Index));
 	}
 	
 	NumCaptures = 0;
@@ -683,7 +658,6 @@ void UK2Node_EnhancedAsyncTaskBase::SyncContextPinState()
 			
 			ContextPin->Modify();
 			ContextPin->bHidden = bHidden;
-			ContextPin->bNotConnectable = bHidden;
 
 			if (bHidden && ContextPin->LinkedTo.Num())
 			{
@@ -701,7 +675,7 @@ void UK2Node_EnhancedAsyncTaskBase::PinConnectionListChanged(UEdGraphPin* Pin)
 	
 	Super::PinConnectionListChanged(Pin);
 
-	if (IsDynamicPin(Pin) && !Pin->IsPendingKill())
+	if (IsCapturePin(Pin) && !Pin->IsPendingKill())
 	{
 		SynchronizeArgumentPinType(Pin);
 	}
@@ -710,7 +684,7 @@ void UK2Node_EnhancedAsyncTaskBase::PinConnectionListChanged(UEdGraphPin* Pin)
 void UK2Node_EnhancedAsyncTaskBase::PinTypeChanged(UEdGraphPin* Pin)
 {
 	UE_LOG(LogEnhancedAction, Log, TEXT("%p:PinTypeChanged"), this);
-	if (IsDynamicPin(Pin) && !Pin->IsPendingKill())
+	if (IsCapturePin(Pin) && !Pin->IsPendingKill())
 	{
 		SynchronizeArgumentPinType(Pin);
 	}
@@ -731,7 +705,7 @@ void UK2Node_EnhancedAsyncTaskBase::PostReconstructNode()
 		{
 			for (UEdGraphPin* CurrentPin : Pins)
 			{
-				if (IsDynamicPin(CurrentPin))
+				if (IsCapturePin(CurrentPin))
 				{
 					SynchronizeArgumentPinType(CurrentPin);
 				}
@@ -779,7 +753,7 @@ void UK2Node_EnhancedAsyncTaskBase::SynchronizeArgumentPinType(UEdGraphPin* Pin)
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::ValidateDelegates(
-            const UEdGraphSchema_K2* Schema, class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
+    const UEdGraphSchema_K2* Schema, class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
 	const FName& ContextPinName = AsyncContextParameterName;
 	if (ContextPinName.IsNone())
@@ -828,7 +802,7 @@ bool UK2Node_EnhancedAsyncTaskBase::ValidateCaptures(const UEdGraphSchema_K2* Sc
 
 	for (int32 Index = 0; Index < NumCaptures; ++Index)
 	{
-		UEdGraphPin* ArgumentTypePin =  FindDynamicPin(EGPD_Input, Index);
+		UEdGraphPin* ArgumentTypePin =  FindCapturePin(EGPD_Input, Index);
 
 		if (EAA::Internals::IsWildcardType(ArgumentTypePin->PinType))
 			continue;
@@ -849,25 +823,21 @@ bool UK2Node_EnhancedAsyncTaskBase::ValidateCaptures(const UEdGraphSchema_K2* Sc
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
-	UEdGraphPin* InContextPin, UEdGraphPin*& LastThenPin,
+	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& LastThenPin,
 	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
 	bool bIsErrorFree = true;
-	for (int32 Index = 0; Index < NumCaptures; ++Index)
+	for (const FInputPinInfo& Info : CaptureInputs)
 	{
-		UEdGraphPin* ArgumentTypePin =  FindDynamicPin(EGPD_Input, Index);
+		const int32 Index = Info.CaptureIndex;
+		UEdGraphPin* const InputPin = Info.InputPin;
 		
-		if (EAA::Internals::IsWildcardType(ArgumentTypePin->PinType))
-			continue;
-		if (!ArgumentTypePin->LinkedTo.Num())
-			continue;
-
 		UK2Node_CallFunction* CallNode = nullptr;
 
 		FName SetValueFunc;
-		if (EAA::Internals::SelectAccessorForType(ArgumentTypePin, EAA::Internals::EAccessorRole::SETTER, SetValueFunc))
+		if (EAA::Internals::SelectAccessorForType(InputPin, EAA::Internals::EAccessorRole::SETTER, SetValueFunc))
 		{
-			if (ArgumentTypePin->PinType.IsArray())
+			if (InputPin->PinType.IsArray())
 			{
 				CallNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallArrayFunction>(this, SourceGraph);
 			}
@@ -876,7 +846,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
 				CallNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 			}
 			
-			CallNode->SetFromFunction(UEnhancedAsyncActionContextLibrary::StaticClass()->FindFunctionByName(SetValueFunc));
+			CallNode->FunctionReference.SetExternalMember(SetValueFunc, UEnhancedAsyncActionContextLibrary::StaticClass());
 			CallNode->AllocateDefaultPins();
 			ensure(CallNode->GetTargetFunction() != nullptr);
 		}
@@ -885,7 +855,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
 		{
 			const FString FormattedMessage = FText::Format(
 				LOCTEXT("AsyncTaskErrorFmt", "EnhancedAsyncTaskBase: no SETTER for {0} in async task @@"),
-				FText::FromName(ArgumentTypePin->PinType.PinCategory)
+				FText::FromName(InputPin->PinType.PinCategory)
 			).ToString();
 			CompilerContext.MessageLog.Error(*FormattedMessage, this);
 			bIsErrorFree = false;
@@ -895,19 +865,86 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
 		// match function inputs, to pass data to function from CallFunction node
 
 		UEdGraphPin* HandlePin = CallNode->FindPinChecked(EAA::Internals::PIN_Handle);
-		bIsErrorFree &=  Schema->TryCreateConnection(InContextPin, HandlePin);
+		bIsErrorFree &=  Schema->TryCreateConnection(InContextHandlePin, HandlePin);
 			
 		UEdGraphPin* IndexPin = CallNode->FindPinChecked(EAA::Internals::PIN_Index);
 		Schema->TrySetDefaultValue(*IndexPin, FString::Printf(TEXT("%d"), Index));
 			
 		UEdGraphPin* ValuePin = CallNode->FindPinChecked(EAA::Internals::PIN_Value);
-		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*ArgumentTypePin, *ValuePin).CanSafeConnect();
+		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
 		CallNode->PinConnectionListChanged(ValuePin);
 
 		// Connect [Last] and [Set]
 		bIsErrorFree &= Schema->TryCreateConnection(LastThenPin, CallNode->GetExecPin());
 		LastThenPin = CallNode->GetThenPin();
 	}
+
+	return bIsErrorFree;
+}
+
+bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
+	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
+{
+	bool bIsErrorFree = true;
+
+	// Create a "Make Array" node to compile the list of arguments into an array
+	UK2Node_MakeArray* MakeArrayNode = CompilerContext.SpawnIntermediateNode<UK2Node_MakeArray>(this, SourceGraph);
+	MakeArrayNode->NumInputs = CaptureInputs.Num();
+	MakeArrayNode->AllocateDefaultPins();
+
+	// Create Call "Set Context Variadic"
+	UK2Node_CallFunction* CallSetVariadic = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
+	CallSetVariadic->FunctionReference.SetExternalMember(
+		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_SetValue_Variadic),
+		UEnhancedAsyncActionContextLibrary::StaticClass()
+	);
+	CallSetVariadic->AllocateDefaultPins();
+
+	int32 ArrayInputIndex = 0;
+	for (const FInputPinInfo& Info : CaptureInputs)
+	{
+		UEdGraphPin* const InputPin = Info.InputPin;
+		const FName InputPinName = EAA::Internals::IndexToName(Info.CaptureIndex);
+
+		// Create the "Make Literal String" node
+		UK2Node_CallFunction* MakeLiteralStringNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
+		MakeLiteralStringNode->FunctionReference.SetExternalMember(
+			GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
+			UKismetSystemLibrary::StaticClass()
+		);
+		MakeLiteralStringNode->AllocateDefaultPins();
+
+		// Set the literal value to the capture parameter name
+		UEdGraphPin* MakeLiteralStringValuePin = MakeLiteralStringNode->FindPinChecked(TEXT("Value"), EGPD_Input);
+		Schema->TrySetDefaultValue(*MakeLiteralStringValuePin, InputPinName.ToString());
+
+		// Find the input pin on the "Make Array" node by index and link it to the literal string
+		UEdGraphPin* ArrayIn = MakeArrayNode->FindPinChecked(MakeArrayNode->GetPinName(ArrayInputIndex++));
+		bIsErrorFree &= Schema->TryCreateConnection(MakeLiteralStringNode->GetReturnValuePin(), ArrayIn);
+
+		// Create variadic pin on setter function
+		UEdGraphPin* ValuePin = CallSetVariadic->CreatePin(EGPD_Input, InputPin->PinType, InputPinName);
+		ValuePin->PinType.bIsReference = true;
+		ValuePin->PinType.bIsConst = true;
+
+		// Move Capture pin to generated intermediate
+		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
+		CallSetVariadic->NotifyPinConnectionListChanged(ValuePin);
+	}
+	
+	// Set the handle parameter
+	UEdGraphPin* HandlePin = CallSetVariadic->FindPinChecked(EAA::Internals::PIN_Handle);
+	bIsErrorFree &=  Schema->TryCreateConnection(InContextHandlePin, HandlePin);
+
+	// Set the names parameter and force the makearray pin type
+	UEdGraphPin* ArrayOut = MakeArrayNode->GetOutputPin();
+	bIsErrorFree &= Schema->TryCreateConnection(ArrayOut, CallSetVariadic->FindPinChecked(TEXT("Names")));
+	MakeArrayNode->PinConnectionListChanged(ArrayOut);
+
+	// Connect execs
+	bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallSetVariadic->GetExecPin());
+	InOutLastThenPin = CallSetVariadic->GetThenPin();
 
 	return bIsErrorFree;
 }
@@ -932,8 +969,6 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 			const bool bIsProxyPin  = (OutputAsyncTaskProxy == CurrentPin);
 			const bool bIsContextPin = IsContextPin(CurrentPin);
 			
-			UE_LOG(LogEnhancedAction, Log, TEXT("Gather Delegate %s"), *EAA::Internals::ToDebugString(CurrentPin));
-
 			if (!bIsProxyPin && FBaseAsyncTaskHelper::ValidDataPin(CurrentPin, EGPD_Output))
 			{
 				if (!bPassedFactoryOutputs)
@@ -952,7 +987,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 					// move external pins to the temporary variable
 					bIsErrorFree &= TempVarOutput->GetVariablePin()
 						&& CompilerContext.MovePinLinksToIntermediate(*CurrentPin, *TempVarOutput->GetVariablePin()).CanSafeConnect();
-					VariableOutputs.Add(FOutputPinInfo(FOutputPinInfo::DELEGATE, CurrentPin, TempVarOutput));
+					VariableOutputs.Add(FOutputPinInfo(CurrentPin, TempVarOutput, INDEX_NONE));
 				}
 			}
 			else if (!bPassedFactoryOutputs && CurrentPin && CurrentPin->Direction == EGPD_Output)
@@ -968,23 +1003,21 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 	{
 		for (int32 Index = 0; Index < NumCaptures; ++Index)
 		{
-			UEdGraphPin* const CurrentPin  = FindDynamicPin(EGPD_Output, Index);
+			UEdGraphPin* const DynamicOutputPin  = FindCapturePin(EGPD_Output, Index);
+			check(DynamicOutputPin);
 
-			if (!CurrentPin->LinkedTo.Num())
-				continue;
-			if (EAA::Internals::IsWildcardType(CurrentPin->PinType))
-				continue;
+			UK2Node_TemporaryVariable* TempVarOutput = nullptr;
 			
-			UE_LOG(LogEnhancedAction, Log, TEXT("Gather Capture %s"), *EAA::Internals::ToDebugString(CurrentPin));
+			const bool bInUse = DynamicOutputPin->LinkedTo.Num() && !EAA::Internals::IsWildcardType(DynamicOutputPin->PinType);
+			if (bInUse)
+			{
+				const FEdGraphPinType& PinType = DynamicOutputPin->PinType;
+				TempVarOutput = CompilerContext.SpawnInternalVariable(this, PinType.PinCategory, PinType.PinSubCategory, PinType.PinSubCategoryObject.Get(), PinType.ContainerType, PinType.PinValueType);
+				// move external pins to the temporary variable
+				bIsErrorFree &= TempVarOutput->GetVariablePin() && CompilerContext.MovePinLinksToIntermediate(*DynamicOutputPin, *TempVarOutput->GetVariablePin()).CanSafeConnect();
 
-			const FEdGraphPinType& PinType = CurrentPin->PinType;
-			UK2Node_TemporaryVariable* TempVarOutput = CompilerContext.SpawnInternalVariable(this,
-				PinType.PinCategory, PinType.PinSubCategory, PinType.PinSubCategoryObject.Get(), PinType.ContainerType, PinType.PinValueType);
-			// move external pins to the temporary variable
-			bIsErrorFree &= TempVarOutput->GetVariablePin()
-				&& CompilerContext.MovePinLinksToIntermediate(*CurrentPin, *TempVarOutput->GetVariablePin()).CanSafeConnect();
-
-			CaptureOutputs.Add(FOutputPinInfo(FOutputPinInfo::CAPTURE, CurrentPin, TempVarOutput, Index));
+				CaptureOutputs.Add(FOutputPinInfo(DynamicOutputPin, TempVarOutput, Index));
+			}
 		}
 	}
 	
@@ -992,8 +1025,6 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 	{
 		FMulticastDelegateProperty* const CurrentProperty = *PropertyIt;
 
-		UE_LOG(LogEnhancedAction, Log, TEXT("Process delegate %s"), *EAA::Internals::ToDebugString(CurrentProperty));
-		
 		UEdGraphPin* OutLastActivatedThenPin = nullptr;
 
 		UEdGraphPin* PinForCurrentDelegateProperty = static_cast<UK2Node_EnhancedAsyncTaskBase*const>(this)->FindPin(CurrentProperty->GetFName());
@@ -1035,8 +1066,9 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 		// Create context loader
 		{
 			UK2Node_CallFunction* const CallGetCtx = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
-			const FName GetContextFn = GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, FindCaptureContextForObject);
-			CallGetCtx->FunctionReference.SetExternalMember(GetContextFn, UEnhancedAsyncActionContextLibrary::StaticClass());
+			CallGetCtx->FunctionReference.SetExternalMember(
+				GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, FindCaptureContextForObject),
+				UEnhancedAsyncActionContextLibrary::StaticClass());
 			CallGetCtx->AllocateDefaultPins();
 
 			UEdGraphPin* PinWithData = CurrentCENode->FindPin(AsyncContextParameterName);
@@ -1053,83 +1085,20 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 			
 			bIsErrorFree &= Schema->TryCreateConnection(PinWithData, CallGetCtx->FindPinChecked(EAA::Internals::PIN_Action));
 
-			if (!CallGetCtx->IsNodePure())
-			{
-				bIsErrorFree &= Schema->TryCreateConnection(OutLastActivatedThenPin, CallGetCtx->GetExecPin());
-				OutLastActivatedThenPin = CallGetCtx->GetThenPin();
-			}
+			bIsErrorFree &= Schema->TryCreateConnection(OutLastActivatedThenPin, CallGetCtx->GetExecPin());
+			OutLastActivatedThenPin = CallGetCtx->GetThenPin();
 		}
 
-		check(ContextHandlePin);
-		
-		// CREATE CONTEXT ACCESSORS
-		for (FOutputPinInfo& OutputPair : CaptureOutputs)
+		// CREATE CONTEXT GETTERS
+		if (EAA::Switches::bVariadicGetSet)
 		{
-			ensure(OutputPair.CaptureIndex != -1);
-
-			// [temp var]      - [assign]
-			// [context read]  - [value ]
-			UK2Node_CallFunction* CallReadNode = nullptr;
-			
-			FName GetValueFunc;
-			if (EAA::Internals::SelectAccessorForType(OutputPair.OutputPin, EAA::Internals::EAccessorRole::GETTER, GetValueFunc))
-			{
-				if (OutputPair.OutputPin->PinType.IsArray())
-				{
-					CallReadNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallArrayFunction>(this, SourceGraph);
-				}
-				else
-				{
-					CallReadNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
-				}
-				CallReadNode->FunctionReference.SetExternalMember(GetValueFunc, UEnhancedAsyncActionContextLibrary::StaticClass());
-				CallReadNode->AllocateDefaultPins();
-				ensure(CallReadNode->GetTargetFunction() != nullptr);
-				ensure(!CallReadNode->IsNodePure());
-			}
-
-			if (!CallReadNode)
-			{
-				const FString FormattedMessage = FText::Format(
-					LOCTEXT("AsyncTaskErrorFmt", "EnhancedAsyncTaskBase: no GETTER for {0} in async task @@"),
-					FText::FromName(OutputPair.OutputPin->PinType.PinCategory)
-				).ToString();
-				CompilerContext.MessageLog.Error(*FormattedMessage, this);
-				bIsErrorFree = false;
-				continue;
-			}
-
-			bIsErrorFree &= Schema->TryCreateConnection(OutLastActivatedThenPin, CallReadNode->GetExecPin());
-			OutLastActivatedThenPin = CallReadNode->GetThenPin();
-			
-			UK2Node_AssignmentStatement* AssignNode = CompilerContext.SpawnIntermediateNode<UK2Node_AssignmentStatement>(this, SourceGraph);
-			AssignNode->AllocateDefaultPins();
-
-			// handle
-			bIsErrorFree &= Schema->TryCreateConnection(CallReadNode->FindPinChecked(EAA::Internals::PIN_Handle), ContextHandlePin);
-			// index
-			Schema->TrySetDefaultValue(*CallReadNode->FindPinChecked(EAA::Internals::PIN_Index), FString::Printf(TEXT("%d"), OutputPair.CaptureIndex));
-			// value
-			bIsErrorFree &= Schema->TryCreateConnection(OutputPair.TempVar->GetVariablePin(), AssignNode->GetVariablePin());
-			AssignNode->NotifyPinConnectionListChanged(AssignNode->GetVariablePin());
-			// return
-			UEdGraphPin* ValuePin = CallReadNode->FindPinChecked(EAA::Internals::PIN_Value);
-			// todo: remove this hack and solve how to conform these two
-			// GET_Object and GET_Class return UObject*& and has no PinCategoryObject set (should be forced to be wildcard?)
-			// so TryCreateConnection fails. as it has PinCategoryObject known.
-			// Force ValuePin PinCategoryObject to known value, in case types mismatch it will result in assert in execGetObject/GetValueObject
-			ConformDynamicOutputPin(Schema, CallReadNode, ValuePin, AssignNode->GetVariablePin()->PinType);
-			bIsErrorFree &= Schema->TryCreateConnection(AssignNode->GetValuePin(), ValuePin);
-			AssignNode->NotifyPinConnectionListChanged(AssignNode->GetValuePin());
-			CallReadNode->NotifyPinConnectionListChanged(ValuePin);
-			
-			// exec
-			bIsErrorFree &= Schema->TryCreateConnection(OutLastActivatedThenPin, AssignNode->GetExecPin());
-			OutLastActivatedThenPin = AssignNode->GetThenPin();
-
-			//
-			ensure(bIsErrorFree);
+			bIsErrorFree &= HandleGetContextDataVariadic(CaptureOutputs, ContextHandlePin, OutLastActivatedThenPin, Schema, CompilerContext, SourceGraph);
 		}
+		else
+		{
+			bIsErrorFree &= HandleGetContextData(CaptureOutputs, ContextHandlePin, OutLastActivatedThenPin, Schema, CompilerContext, SourceGraph);
+		}
+		ensureAlwaysMsgf(bIsErrorFree, TEXT("node failed to build"));
 
 		// CREATE CHAIN OF ASSIGMENTS FOR CALLBACK
 		for (FOutputPinInfo& OutputPair : VariableOutputs) 
@@ -1156,39 +1125,155 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 		
 		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*PinForCurrentDelegateProperty, *OutLastActivatedThenPin).CanSafeConnect();
 	}
-
 	
 	return bIsErrorFree;
 }
 
-void UK2Node_EnhancedAsyncTaskBase::ConformDynamicOutputPin(const UEdGraphSchema_K2* Schema, UK2Node_CallFunction* Func, UEdGraphPin* Pin, const FEdGraphPinType& VarType)
+bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextData(
+	const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
-	static const FName MD_GenericParam(TEXT("GenericParam"));
-
-	const FString* GenericParam = Func->GetTargetFunction()->FindMetaData(MD_GenericParam);
-	if (GenericParam &&
-		(!GenericParam->Len() && Pin->GetName() == TEXT("Value") || (Pin->GetName() == *GenericParam))
-	)
+	bool bIsErrorFree = true;
+	
+	for (const FOutputPinInfo& OutputPair : CaptureOutputs)
 	{
-		Pin->PinType = VarType;
-		return;
-	}
-
-	auto DynamicPin = Func->GetTargetFunction()->FindMetaData(FBlueprintMetadata::MD_DynamicOutputParam);
-	if (DynamicPin && *DynamicPin == Pin->GetName() && Pin->PinType.PinCategory == VarType.PinCategory)
-	{
-		const FName PinCategory = Pin->PinType.PinCategory;
-		if ((PinCategory == UEdGraphSchema_K2::PC_Object) ||
-			(PinCategory == UEdGraphSchema_K2::PC_Interface) ||
-			(PinCategory == UEdGraphSchema_K2::PC_Class) ||
-			(PinCategory == UEdGraphSchema_K2::PC_SoftObject) || 
-			(PinCategory == UEdGraphSchema_K2::PC_SoftClass))
+		// [temp var]      - [assign]
+		// [context read]  - [value ]
+		UK2Node_CallFunction* CallReadNode = nullptr;
+		
+		FName GetValueFunc;
+		if (EAA::Internals::SelectAccessorForType(OutputPair.OutputPin, EAA::Internals::EAccessorRole::GETTER, GetValueFunc))
 		{
-			//UClass* ExpectedClass = CastChecked<UClass>(VarType.PinSubCategoryObject.Get());
-			//UClass* GetterClass = CastChecked<UClass>(Pin->PinType.PinSubCategoryObject.Get());
-			Pin->PinType = VarType;
+			if (OutputPair.OutputPin->PinType.IsArray())
+			{
+				CallReadNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallArrayFunction>(this, SourceGraph);
+			}
+			else
+			{
+				CallReadNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
+			}
+			CallReadNode->FunctionReference.SetExternalMember(GetValueFunc, UEnhancedAsyncActionContextLibrary::StaticClass());
+			CallReadNode->AllocateDefaultPins();
+			ensure(CallReadNode->GetTargetFunction() != nullptr);
 		}
+
+		if (!CallReadNode)
+		{
+			const FString FormattedMessage = FText::Format(
+				LOCTEXT("AsyncTaskErrorFmt", "EnhancedAsyncTaskBase: no GETTER for {0} in async task @@"),
+				FText::FromName(OutputPair.OutputPin->PinType.PinCategory)
+			).ToString();
+			CompilerContext.MessageLog.Error(*FormattedMessage, this);
+			bIsErrorFree = false;
+			continue;
+		}
+
+		bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallReadNode->GetExecPin());
+		InOutLastThenPin = CallReadNode->GetThenPin();
+		
+		UK2Node_AssignmentStatement* AssignNode = CompilerContext.SpawnIntermediateNode<UK2Node_AssignmentStatement>(this, SourceGraph);
+		AssignNode->AllocateDefaultPins();
+
+		// handle
+		bIsErrorFree &= Schema->TryCreateConnection(CallReadNode->FindPinChecked(EAA::Internals::PIN_Handle), ContextHandlePin);
+		// index
+		Schema->TrySetDefaultValue(*CallReadNode->FindPinChecked(EAA::Internals::PIN_Index), FString::Printf(TEXT("%d"), OutputPair.CaptureIndex));
+		// value
+		bIsErrorFree &= Schema->TryCreateConnection(OutputPair.TempVar->GetVariablePin(), AssignNode->GetVariablePin());
+		AssignNode->NotifyPinConnectionListChanged(AssignNode->GetVariablePin());
+		// return
+		UEdGraphPin* ValuePin = CallReadNode->FindPinChecked(EAA::Internals::PIN_Value);
+		bIsErrorFree &= Schema->TryCreateConnection(AssignNode->GetValuePin(), ValuePin);
+		AssignNode->NotifyPinConnectionListChanged(AssignNode->GetValuePin());
+		CallReadNode->NotifyPinConnectionListChanged(ValuePin);
+		
+		// exec
+		bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, AssignNode->GetExecPin());
+		InOutLastThenPin = AssignNode->GetThenPin();
 	}
+
+	return bIsErrorFree;
+}
+
+bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
+	const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
+{
+	bool bIsErrorFree = true;
+
+	// Create a "Make Array" node to compile the list of arguments into an array
+	UK2Node_MakeArray* MakeArrayNode = CompilerContext.SpawnIntermediateNode<UK2Node_MakeArray>(this, SourceGraph);
+	MakeArrayNode->NumInputs = CaptureOutputs.Num();
+	MakeArrayNode->AllocateDefaultPins();
+
+	int32 ArrayInputIndex = 0;
+	for (const FOutputPinInfo& OutputPair : CaptureOutputs)
+	{
+		const FName PropertyName = EAA::Internals::IndexToName(OutputPair.CaptureIndex);
+		
+		// Create the "Make Literal String" node
+		UK2Node_CallFunction* MakeLiteralStringNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
+		MakeLiteralStringNode->FunctionReference.SetExternalMember(
+			GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
+			UKismetSystemLibrary::StaticClass()
+		);
+		MakeLiteralStringNode->AllocateDefaultPins();
+
+		// Set the literal value to the capture parameter name
+		UEdGraphPin* MakeLiteralStringValuePin = MakeLiteralStringNode->FindPinChecked(TEXT("Value"), EGPD_Input);
+		Schema->TrySetDefaultValue(*MakeLiteralStringValuePin, PropertyName.ToString());
+		
+		// Find the input pin on the "Make Array" node by index and link it to the literal string
+		UEdGraphPin* ArrayIn = MakeArrayNode->FindPinChecked(MakeArrayNode->GetPinName(ArrayInputIndex++));
+		bIsErrorFree &= Schema->TryCreateConnection(MakeLiteralStringNode->GetReturnValuePin(), ArrayIn);
+	}
+
+	auto CallGetVariadic = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
+	CallGetVariadic->FunctionReference.SetExternalMember(
+		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_GetValue_Variadic),
+		UEnhancedAsyncActionContextLibrary::StaticClass()
+	);
+	CallGetVariadic->AllocateDefaultPins();
+
+	// handle
+	bIsErrorFree &= Schema->TryCreateConnection(CallGetVariadic->FindPinChecked(EAA::Internals::PIN_Handle), ContextHandlePin);
+
+	// Set the names parameter and force the makearray pin type
+	UEdGraphPin* ArrayOut = MakeArrayNode->GetOutputPin();
+	bIsErrorFree &= Schema->TryCreateConnection(ArrayOut, CallGetVariadic->FindPinChecked(TEXT("Names")));
+	MakeArrayNode->PinConnectionListChanged(ArrayOut);
+	
+	bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallGetVariadic->GetExecPin());
+	InOutLastThenPin = CallGetVariadic->GetThenPin();
+
+	for (const FOutputPinInfo& OutputPair : CaptureOutputs)
+	{
+		const FName PropertyName = EAA::Internals::IndexToName(OutputPair.CaptureIndex);
+		const auto& PinType = OutputPair.OutputPin->PinType;
+
+		// create variadic pin
+		UEdGraphPin* const ValuePin = CallGetVariadic->CreatePin(EGPD_Output, PinType, PropertyName);
+		ValuePin->PinType.bIsReference = true;
+		ValuePin->PinType.bIsConst = false;
+
+		// make assignment node to the hidden temp variable 
+		UK2Node_AssignmentStatement* AssignNode = CompilerContext.SpawnIntermediateNode<UK2Node_AssignmentStatement>(this, SourceGraph);
+		AssignNode->AllocateDefaultPins();
+
+		// value
+		bIsErrorFree &= Schema->TryCreateConnection(OutputPair.TempVar->GetVariablePin(), AssignNode->GetVariablePin());
+		AssignNode->NotifyPinConnectionListChanged(AssignNode->GetVariablePin());
+
+		// return
+		bIsErrorFree &= Schema->TryCreateConnection(AssignNode->GetValuePin(), ValuePin);
+		AssignNode->NotifyPinConnectionListChanged(AssignNode->GetValuePin());
+		
+		// exec
+		bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, AssignNode->GetExecPin());
+		InOutLastThenPin = AssignNode->GetThenPin();
+	}
+	
+	return bIsErrorFree;
 }
 
 void UK2Node_EnhancedAsyncTaskBase::OrphanCapturePins()
@@ -1199,14 +1284,14 @@ void UK2Node_EnhancedAsyncTaskBase::OrphanCapturePins()
 	
 	for (int32 Index = 0; Index < NumCaptures; ++Index)
 	{
-		auto InPin = FindDynamicPin(EGPD_Input, Index);
+		auto InPin = FindCapturePin(EGPD_Input, Index);
 		if (InPin)
 		{
 			//InPin->bOrphanedPin = true;
 			InPin->PinType = ExecPinType;
 		}
 
-		auto OutPin = FindDynamicPin(EGPD_Output, Index);
+		auto OutPin = FindCapturePin(EGPD_Output, Index);
 		if (OutPin)
 		{
 			//OutPin->bOrphanedPin = true;
@@ -1262,9 +1347,7 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	
 	// Is Context feature used on this node
 	const bool bContextRequired = HasAnyLinkedCaptures();
-	// Is Context setup needed on this node
-	const bool bContextSetupRequired = bContextRequired && NeedSetupCaptureContext();
-
+	
 	// If there is no need in context - just use default implementation of async node
 	if (!bContextRequired)
 	{
@@ -1330,8 +1413,9 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	// Validate proxy object
 	
 	UK2Node_CallFunction* IsValidFuncNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
-	const FName IsValidFuncName = GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, IsValid);
-	IsValidFuncNode->FunctionReference.SetExternalMember(IsValidFuncName, UKismetSystemLibrary::StaticClass());
+	IsValidFuncNode->FunctionReference.SetExternalMember(
+		GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, IsValid),
+		UKismetSystemLibrary::StaticClass());
 	IsValidFuncNode->AllocateDefaultPins();
 
 	bIsErrorFree &= Schema->TryCreateConnection(ProxyObjectPin, IsValidFuncNode->FindPinChecked(TEXT("Object")));
@@ -1366,11 +1450,24 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	check(CaptureContextHandlePin);
 
 	// Configure context
+	const bool bContextSetupRequired = bContextRequired && HasAnyCapturePins()
+		&& EAA::Switches::bWithSetupContext
+		&& !EAA::Switches::bVariadicGetSet;
 
 	if (bContextSetupRequired)
 	{
 		const FString CapturesConfigString = EAA::Internals::BuildContextConfigString(this, NumCaptures);
-		//UE_LOG(LogEnhancedAction, Log, TEXT("%p:Config=%s"), this, *CapturesConfigString);
+
+		// Create Make Literal String function
+		UK2Node_CallFunction* const CallMakeLiteral = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
+		CallMakeLiteral->FunctionReference.SetExternalMember(
+			GET_MEMBER_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
+			UKismetSystemLibrary::StaticClass()
+		);
+		CallMakeLiteral->AllocateDefaultPins();
+
+		auto LiteralValuePin = CallMakeLiteral->FindPinChecked(TEXT("Value"), EGPD_Input);
+		LiteralValuePin->DefaultValue = CapturesConfigString;
 	
 		// Create a call to context setup
 		UK2Node_CallFunction* const CallSetupCaptureNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
@@ -1384,15 +1481,39 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 
 		// Set config value
 		UEdGraphPin* ConfigPin = CallSetupCaptureNode->FindPinChecked(TEXT("Config"));
-		Schema->TrySetDefaultValue(*ConfigPin, CapturesConfigString);
+		// Schema->TrySetDefaultValue(*ConfigPin, CapturesConfigString);
+		bIsErrorFree &= Schema->TryCreateConnection(CallMakeLiteral->GetReturnValuePin(), ConfigPin);
 
 		// Connect [CreateContext] and [SetupContext]
 		bIsErrorFree &= Schema->TryCreateConnection(LastThenPin, CallSetupCaptureNode->GetExecPin());
 		LastThenPin = CallSetupCaptureNode->GetThenPin();
 	}
 
+	TArray<FInputPinInfo> CaptureInputs;
+	for (int32 Index = 0; Index < NumCaptures; ++Index)
+	{
+		UEdGraphPin* const DynamicInputPin = FindCapturePin(EGPD_Input, Index);
+		check(DynamicInputPin);
+
+		const bool bInUse = DynamicInputPin->LinkedTo.Num() && !EAA::Internals::IsWildcardType(DynamicInputPin->PinType);
+		if (bInUse)
+		{
+			FInputPinInfo& Info = CaptureInputs.AddDefaulted_GetRef();
+			Info.CaptureIndex = Index;
+			Info.InputPin = DynamicInputPin;
+		}
+	}
+
 	// Create capture setters 
-	bIsErrorFree &= HandleSetContextData(CaptureContextHandlePin, LastThenPin, Schema, CompilerContext, SourceGraph);
+	if (EAA::Switches::bVariadicGetSet)
+	{
+		bIsErrorFree &= HandleSetContextDataVariadic(CaptureInputs, CaptureContextHandlePin, LastThenPin, Schema, CompilerContext, SourceGraph);
+	}
+	else
+	{
+		bIsErrorFree &= HandleSetContextData(CaptureInputs, CaptureContextHandlePin, LastThenPin, Schema, CompilerContext, SourceGraph);
+	}
+	ensureAlwaysMsgf(bIsErrorFree, TEXT("node failed to build"));
 
 	UEdGraphPin* OutputAsyncTaskProxy = FindPin(FBaseAsyncTaskHelper::GetAsyncTaskProxyName());
 	bIsErrorFree &= !OutputAsyncTaskProxy || CompilerContext.MovePinLinksToIntermediate(*OutputAsyncTaskProxy, *ProxyObjectPin).CanSafeConnect();

@@ -89,18 +89,15 @@ public:
 	bool HasAnyCapturePins() const { return NumCaptures > 0; }
 	bool HasAnyLinkedCaptures() const;
 	bool HasContextExposed() const;
-	bool NeedSetupCaptureContext() const;
 	
 	TArray<UEdGraphPin*> GetStandardPins(EEdGraphPinDirection Dir) const;
 
-	bool HasDefaultDynamicPins(const UScriptStruct*& Skeleton) const;
 	bool IsDynamicContainerType() const;
 
-	UEdGraphPin* FindDynamicPin(EEdGraphPinDirection Dir, int32 PinIndex) const;
+	UEdGraphPin* FindCapturePin(EEdGraphPinDirection Dir, int32 PinIndex) const;
 	UEdGraphPin* FindMatchingPin(const UEdGraphPin* Pin, EEdGraphPinDirection Dir) const;
-	UEdGraphPin* FindMatchingPin(const UEdGraphPin* Pin) const;
-	bool IsDynamicPin(const UEdGraphPin* Pin) const;
-	FName GetPinName(EEdGraphPinDirection Dir, int32 PinIndex) const;
+	bool IsCapturePin(const UEdGraphPin* Pin) const;
+	FName GetCapturePinName(EEdGraphPinDirection Dir, int32 PinIndex) const;
 	
 	bool IsContextPin(const UEdGraphPin* Pin) const;
 
@@ -116,8 +113,8 @@ public:
 	virtual bool CanRemovePin(const UEdGraphPin* Pin) const override;
 	virtual void RemoveInputPin(UEdGraphPin* Pin) override;
 
-	void UnlinkAllDynamicPins();
-	void RemoveAllDynamicPins();
+	void UnlinkAllCapturePins();
+	void RemoveAllCapturePins();
 
 	FText ToggleContextPinStateLabel() const;
 	void ToggleContextPinState();
@@ -128,20 +125,23 @@ public:
 	virtual void PostReconstructNode() override;
 	void SynchronizeArgumentPinType(UEdGraphPin* Pin);
 
+	struct FInputPinInfo
+	{
+		int32 CaptureIndex = INDEX_NONE;
+		UEdGraphPin* InputPin = nullptr;
+	};
+
 	struct FOutputPinInfo
 	{
-		enum ESource { DELEGATE, CAPTURE };
-
-		int32 CaptureIndex = -1;
-		ESource Source;
+		int32 CaptureIndex;
 		UEdGraphPin* OutputPin;
 		UK2Node_TemporaryVariable* TempVar;
 
 		const FName& GetName() const { return OutputPin->PinName; }
 		const FName& GetCategory() const { return OutputPin->PinType.PinCategory; }
 
-		FOutputPinInfo(ESource Src, UEdGraphPin* Pin, UK2Node_TemporaryVariable* Var) : Source(Src), OutputPin(Pin), TempVar(Var) {}
-		FOutputPinInfo(ESource Src, UEdGraphPin* Pin, UK2Node_TemporaryVariable* Var, int32 Idx) : CaptureIndex(Idx), Source(Src), OutputPin(Pin), TempVar(Var) {}
+		FOutputPinInfo(UEdGraphPin* Pin, UK2Node_TemporaryVariable* Var, int32 Idx)
+			: CaptureIndex(Idx), OutputPin(Pin), TempVar(Var) { }
 
 		bool operator==(const FName& Key) const { return OutputPin->PinName == Key; }
 	};
@@ -153,7 +153,11 @@ public:
 	    const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
 	bool HandleSetContextData(
-		UEdGraphPin* InContextPin, UEdGraphPin*& InOutLastThenPin,
+		const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
+	bool HandleSetContextDataVariadic(
+		const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
 		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
 	bool HandleInvokeActivate(
@@ -164,8 +168,14 @@ public:
 		class UK2Node_CallFunction* CallCreateProxyObjectNode, UEdGraphPin*& InOutLastThenPin,
 		const UEdGraphSchema_K2* Schema, UEdGraph* SourceGraph, FKismetCompilerContext& CompilerContext);
 
-	void ConformDynamicOutputPin(const UEdGraphSchema_K2* Schema, UK2Node_CallFunction* Func, UEdGraphPin* Pin, const FEdGraphPinType& VarType);
-	
+	bool HandleGetContextData(
+		const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
+	bool HandleGetContextDataVariadic(
+		const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
 	void OrphanCapturePins();
 
 	virtual void ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph) override;
@@ -176,6 +186,7 @@ protected:
 	// async context property in delegates
 	UPROPERTY()
 	FName AsyncContextParameterName;
+	// marks context pin visible in graph
 	UPROPERTY()
 	bool bExposeContextParameter = false;	
 	// type of context container

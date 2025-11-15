@@ -320,8 +320,8 @@ FString EAA::Internals::BuildContextConfigString(const UK2Node_EnhancedAsyncTask
 	FStringBuilderBase BuilderBase;
 	for (int32 Index = 0; Index < NumCaptures; ++Index)
 	{
-		auto* InPin = Node->FindDynamicPin(EGPD_Input, Index);
-		auto* OutPin = Node->FindDynamicPin(EGPD_Output, Index);
+		auto* InPin = Node->FindCapturePin(EGPD_Input, Index);
+		auto* OutPin = Node->FindCapturePin(EGPD_Output, Index);
 			
 		auto DetectedPinType = EAA::Internals::DeterminePinType(InPin, OutPin);
 
