@@ -1,4 +1,6 @@
-﻿#include "EAAContextLibraryTests.h"
+﻿// Copyright 2025, Aquanox.
+
+#include "EAAContextLibraryTests.h"
 #include "CoreMinimal.h"
 #include "EnhancedAsyncActionContextLibrary.h"
 #include "EnhancedAsyncActionContext.h"

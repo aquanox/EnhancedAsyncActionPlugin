@@ -1,4 +1,6 @@
-﻿using UnrealBuildTool;
+﻿// Copyright 2025, Aquanox.
+
+using UnrealBuildTool;
 
 public class EnhancedAsyncActionEditor : ModuleRules
 {

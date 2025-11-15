@@ -1,4 +1,6 @@
-﻿#include "EnhancedAsyncActionPrivate.h"
+﻿// Copyright 2025, Aquanox.
+
+#include "EnhancedAsyncActionPrivate.h"
 #include "EnhancedAsyncActionShared.h"
 #include "EnhancedAsyncActionContextLibrary.h"
 #include "Kismet/BlueprintAsyncActionBase.h"

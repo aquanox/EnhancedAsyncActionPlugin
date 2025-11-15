@@ -1,4 +1,6 @@
-﻿#pragma once
+﻿// Copyright 2025, Aquanox.
+
+#pragma once
 
 #include "CoreMinimal.h"
 #include "EnhancedAsyncActionContext.h"

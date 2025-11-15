@@ -1,4 +1,6 @@
-﻿#include "EnhancedAsyncActionShared.h"
+﻿// Copyright 2025, Aquanox.
+
+#include "EnhancedAsyncActionShared.h"
 
 #include "StructUtils/PropertyBag.h"
 #include "UObject/Class.h"

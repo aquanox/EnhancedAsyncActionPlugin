@@ -1,4 +1,6 @@
-﻿#include "EnhancedAsyncActionManager.h"
+﻿// Copyright 2025, Aquanox.
+
+#include "EnhancedAsyncActionManager.h"
 #include "EnhancedAsyncActionContext.h"
 #include "EnhancedAsyncActionContextImpl.h"
 #include "Misc/CoreDelegates.h"
