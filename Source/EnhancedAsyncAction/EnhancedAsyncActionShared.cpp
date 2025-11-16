@@ -23,7 +23,6 @@ struct FLocalNameTable
 		static FLocalNameTable Instance;
 		return Instance;
 	}
-	
 private:
 	FLocalNameTable()
 	{
@@ -36,7 +35,7 @@ private:
 			CapturePropertyNames[I] = *FString::Printf(TEXT("ctx%02d"), I);
 			InputPinNames[I] = *FString::Printf(TEXT("In[%d]"), I);
 			OutputPinNames[I] = *FString::Printf(TEXT("Out[%d]"), I);
-			
+
 			MirrorTable[I] = TPair<FName, FName>(InputPinNames[I], OutputPinNames[I]);
 		}
 	}
@@ -106,7 +105,7 @@ bool EAA::Internals::IsValidContainerProperty(const UObject* Object, const FName
 	FStructProperty* StructProperty = CastField<FStructProperty>(Object->GetClass()->FindPropertyByName(Property));
 	if (!StructProperty)
 		return false;
-	
+
 	return StructProperty->Struct && StructProperty->Struct->IsChildOf(FInstancedPropertyBag::StaticStruct());
 }
 
@@ -129,7 +128,7 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 	OutFunction = Role == EAccessorRole::SETTER  \
 		? GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_SetValue_Generic)   \
 		: GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_GetValue_Generic);
-	
+
 	if (TypeInfo.ContainerType == EPropertyBagContainerType::None)
 	{
 		switch(TypeInfo.ValueType)
@@ -199,12 +198,12 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 			FUNC_SELECT(Handle_SetValue_Set, Handle_GetValue_Set);
 		}
 	}
-	
+
 #undef NOT_IMPLEMENTED_YET
 #undef CASE_SELECT
 #undef FUNC_SELECT
 #undef FUNC_SELECT_GENERIC
-	
+
 	return !OutFunction.IsNone();
 }
 
@@ -298,15 +297,15 @@ EPropertyBagPropertyType EAA::Internals::GetValueTypeFromProperty(const FPropert
 	// Handle array property
 	if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(InSourceProperty))
 	{
-		return GetValueTypeFromProperty(ArrayProperty->Inner);	
+		return GetValueTypeFromProperty(ArrayProperty->Inner);
 	}
 
 	// Handle set property
 	if (const FSetProperty* SetProperty = CastField<FSetProperty>(InSourceProperty))
 	{
-		return GetValueTypeFromProperty(SetProperty->ElementProp);	
+		return GetValueTypeFromProperty(SetProperty->ElementProp);
 	}
-	
+
 	return EPropertyBagPropertyType::None;
 }
 
@@ -345,14 +344,14 @@ UObject* EAA::Internals::GetValueTypeObjectFromProperty(const FProperty* InSourc
 	// Handle array property
 	if (const FArrayProperty* ArrayProperty = CastField<FArrayProperty>(InSourceProperty))
 	{
-		return GetValueTypeObjectFromProperty(ArrayProperty->Inner);	
+		return GetValueTypeObjectFromProperty(ArrayProperty->Inner);
 	}
 
 	// Handle set property
 	if (const FSetProperty* SetProperty = CastField<FSetProperty>(InSourceProperty))
 	{
-		return GetValueTypeObjectFromProperty(SetProperty->ElementProp);	
+		return GetValueTypeObjectFromProperty(SetProperty->ElementProp);
 	}
-	
+
 	return nullptr;
 }

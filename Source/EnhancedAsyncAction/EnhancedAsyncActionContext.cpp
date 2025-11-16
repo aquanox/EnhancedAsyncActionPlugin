@@ -19,7 +19,7 @@ bool FPropertyTypeInfo::IsWildcard() const
 	return ContainerType == EPropertyBagContainerType::None
 		&& ValueType == EPropertyBagPropertyType::None
 		&& KeyType == EPropertyBagPropertyType::None;
-	
+
 }
 
 bool FPropertyTypeInfo::IsValid() const
@@ -52,7 +52,7 @@ FString FPropertyTypeInfo::EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo)
 		// Builder.Append(TEXT("M:"));
 		// break;
 	}
-	
+
 	FString Str = StaticEnum<EPropertyBagPropertyType>()->GetNameByValue((int64)TypeInfo.ValueType).ToString();
 	check(Str.StartsWith(EnumPrefix, ESearchCase::CaseSensitive));
 	Builder.Append(Str.RightChop(EnumPrefix.Len()));
@@ -62,7 +62,7 @@ FString FPropertyTypeInfo::EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo)
 		Builder.Append(TEXT("="));
 		Builder.Append(FSoftObjectPath(TypeInfo.ValueTypeObject).ToString());
 	}
-	
+
 	return Builder.ToString();
 }
 
@@ -76,7 +76,7 @@ bool FPropertyTypeInfo::ParseTypeInfo(FString Data, FPropertyTypeInfo& TypeInfo)
 
 	TCHAR ContainerTypeKey = Data[0];
 	Data.MidInline(2);
-	
+
 	if (ContainerTypeKey == TEXT('N') || ContainerTypeKey == TEXT('A') || ContainerTypeKey == TEXT('S'))
 	{
 		switch (ContainerTypeKey)
@@ -86,7 +86,7 @@ bool FPropertyTypeInfo::ParseTypeInfo(FString Data, FPropertyTypeInfo& TypeInfo)
 		case 'S': TypeInfo.ContainerType = EPropertyBagContainerType::Set; break;
 		default: checkNoEntry(); break;
 		}
-		
+
 		FString Type, Object;
 		if (Data.Split(TEXT("="), &Type, &Object))
 		{
@@ -125,6 +125,25 @@ FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagPropertyType Type)
 {
 }
 
+FPropertyTypeInfo::FPropertyTypeInfo(const FProperty* ExistingProperty)
+	: KeyType(EPropertyBagPropertyType::None)
+{
+	ContainerType = EAA::Internals::GetContainerTypeFromProperty(ExistingProperty);
+	if (auto AsMap = CastField<FMapProperty>(ExistingProperty))
+	{
+		ValueType = EAA::Internals::GetValueTypeFromProperty(AsMap->ValueProp);
+		ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(AsMap->ValueProp);
+		KeyType = EAA::Internals::GetValueTypeFromProperty(AsMap->KeyProp);
+		KeyTypeObject =  EAA::Internals::GetValueTypeObjectFromProperty(AsMap->KeyProp);
+	}
+	else
+	{
+		ValueType = EAA::Internals::GetValueTypeFromProperty(ExistingProperty);
+		ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ExistingProperty);
+		KeyType = EPropertyBagPropertyType::None;
+	}
+}
+
 FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object)
 	: ContainerType(EPropertyBagContainerType::None)
 	, ValueType(Type), ValueTypeObject(Object)
@@ -158,11 +177,6 @@ bool FEnhancedAsyncActionContext::GetValueByIndex(int32 Index, const FProperty* 
 
 FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(UObject* InOwner, TSharedRef<FEnhancedAsyncActionContext> Ctx)
 	: Owner(InOwner), Data(Ctx)
-{
-}
-
-FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(UObject* InOwner, FName InDataProp, TSharedRef<FEnhancedAsyncActionContext> Ctx)
-	: Owner(InOwner), DataProperty(InDataProp), Data(Ctx)
 {
 }
 

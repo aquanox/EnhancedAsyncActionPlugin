@@ -35,7 +35,7 @@ public:
 			ScriptStruct->MarkAsGarbage();
 		}
 	}
-	
+
 	const FPropertyBagPropertyDesc* ValueDescriptorOf(const FPropertyBagArrayRef& InRef)
 	{
 		return & ( InRef.*GPropertyBagArrayRef_Desc );
@@ -118,7 +118,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::DebugDump(FStringBuilderBase& 
 		EAA::Internals::BytesToHexImpl(TConstArrayView<uint8>(StructView.GetMemory(), StructView.GetScriptStruct()->GetStructureSize()), HexData);
 		Builder.Appendf(TEXT("DATA base=%p:\n"), StructView.GetMemory()).Append(HexData).Append(TEXT("\n"));
 	}
-	
+
 	for (TPropertyValueIterator<FProperty> It(StructView.GetScriptStruct(), StructView.GetMemory(), EPropertyValueIteratorFlags::NoRecursion); It; ++It)
 	{
 		const FProperty* Property = It->Key;
@@ -140,7 +140,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromProperties(TConstArra
 {
 	if (bPropertyBagStructureLocked)
 		return;
-	
+
 	UE_LOG(LogEnhancedAction, Log, TEXT("SetupFromProperties %d"), Properties.Num());
 
 	TArray<FPropertyBagPropertyDesc> Registrations;
@@ -158,7 +158,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromProperties(TConstArra
 		// there is no need in metadata carry over so can ignore that
 		Registrations.Add(FPropertyBagPropertyDesc(Tuple.Key, ContainerType, ValueType, ValueTypeObject));
 	}
-	
+
 	GetValueRef()->AddProperties(Registrations);
 
 	bPropertyBagStructureLocked = true;
@@ -169,7 +169,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromStringDefinition(cons
 {
 	if (bPropertyBagStructureLocked)
 		return;
-	
+
 	UE_LOG(LogEnhancedAction, Log, TEXT("SetupFromStringData %s"), *InDefinition);
 
 	TArray<FString> Splits;
@@ -183,7 +183,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetupFromStringDefinition(cons
 		ensure(FPropertyTypeInfo::ParseTypeInfo(Splits[PropIndex], TypeInfo));
 		if (TypeInfo.IsWildcard() || !TypeInfo.IsValid())
 			continue;
-		
+
 		switch (TypeInfo.ContainerType)
 		{
 		case EPropertyBagContainerType::None:
@@ -379,7 +379,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::SetValueSoftClass(int32 Index,
 }
 
 // ===============================================
-// 
+//
 // ===============================================
 
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueBool(int32 Index, bool& OutValue)
@@ -466,7 +466,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueText(int32 Index, FTex
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueEnum(int32 Index, UEnum* ExpectedType, uint8& OutValue)
 {
 	OutValue = 0;
-	
+
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueEnum(EAA::Internals::IndexToName(Index), ExpectedType));
 	if (Value.HasValue())
 	{
@@ -477,7 +477,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueEnum(int32 Index, UEnu
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueStruct(int32 Index, UScriptStruct* ExpectedType, const uint8*& OutValue)
 {
 	OutValue = nullptr;
-	
+
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueStruct(EAA::Internals::IndexToName(Index), ExpectedType));
 	if (Value.HasValue())
 	{
@@ -488,7 +488,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueStruct(int32 Index, US
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueObject(int32 Index, UClass* ExpectedClass, UObject*& OutValue)
 {
 	OutValue = nullptr;
-	
+
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueObject(EAA::Internals::IndexToName(Index), ExpectedClass));
 	if (Value.HasValue())
 	{
@@ -499,7 +499,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueObject(int32 Index, UC
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueClass(int32 Index, UClass* ExpectedMetaClass, UClass*& OutValue)
 {
 	OutValue = nullptr;
-	
+
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueClass(EAA::Internals::IndexToName(Index)));
 	if (Value.HasValue())
 	{
@@ -510,7 +510,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueClass(int32 Index, UCl
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueSoftObject(int32 Index, UClass* ExpectedClass, TSoftObjectPtr<UObject>& OutValue)
 {
 	OutValue = nullptr;
-	
+
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueSoftPath(EAA::Internals::IndexToName(Index)));
 	if (Value.HasValue())
 	{
@@ -521,7 +521,7 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueSoftObject(int32 Index
 void FEnhancedAsyncActionContext_PropertyBagBase::GetValueSoftClass(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject>& OutValue)
 {
 	OutValue = nullptr;
-	
+
 	auto Value = VALIDATE_RESULT(GetValueRef()->GetValueSoftPath(EAA::Internals::IndexToName(Index)));
 	if (Value.HasValue())
 	{
@@ -628,7 +628,7 @@ static bool IsCompatibleType(const FPropertyBagPropertyDesc* Descriptor, const F
 
 	if (ValueType == EPropertyBagPropertyType::Enum || ValueType == EPropertyBagPropertyType::Struct)
 	{
-		return ValueTypeObject == Descriptor->ValueTypeObject; 
+		return ValueTypeObject == Descriptor->ValueTypeObject;
 	}
 
 	if (ValueType == EPropertyBagPropertyType::Object)
@@ -637,7 +637,7 @@ static bool IsCompatibleType(const FPropertyBagPropertyDesc* Descriptor, const F
 		const UClass* DescriptorObjectClass = Cast<const UClass>(Descriptor->ValueTypeObject);
 		return CanCastTo(ObjectClass, DescriptorObjectClass);
 	}
-	
+
 	return true;
 }
 

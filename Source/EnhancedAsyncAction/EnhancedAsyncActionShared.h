@@ -63,9 +63,9 @@ namespace EAA::Internals
 	 * Note - bound properties still use index and bound property name shown only for UI
 	 */
 	UE_API FName IndexToName(int32 Index);
-	
+
 	UE_API int32 NameToIndex(const FName& Name);
-	
+
 	UE_API FName IndexToPinName(int32 Index, bool bInput);
 	UE_API int32 PinNameToIndex(const FName& Name, bool bInput);
 
@@ -87,9 +87,9 @@ namespace EAA::Internals
 	UObject* GetValueTypeObjectFromProperty(const FProperty* InSourceProperty);
 
 	/**
-	 * 
-	 * @tparam TProperty 
-	 * @tparam TValueType 
+	 *
+	 * @tparam TProperty
+	 * @tparam TValueType
 	 */
 	template<typename TProperty, typename TValueType>
 	struct TWeakMemberRef
@@ -110,7 +110,7 @@ namespace EAA::Internals
 			}
 			return WeakOwner;
 		}
-		
+
 		TPair<TProperty*, TValueType*> GetPropertyAndValue()
 		{
 			UObject* const WeakOwner = Owner.Get();

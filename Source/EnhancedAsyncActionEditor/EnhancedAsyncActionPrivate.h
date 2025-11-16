@@ -28,24 +28,24 @@ namespace EAA::Internals
 	 * in second round do search on proxy factory type.
 	 *
 	 * Case: in case factory functions returns base pointer type metadata won't be found
-	 * 
-	 * @param FactoryClass 
-	 * @param ProxyClass 
-	 * @param Name 
-	 * @return 
+	 *
+	 * @param FactoryClass
+	 * @param ProxyClass
+	 * @param Name
+	 * @return
 	 */
 	//const FString* FindMetadataHierarchical(const UClass* FactoryClass, const UClass* ProxyClass, const FName& Name);
 
 	/**
 	 * Search for first metadata encounter in hierarchy
-	 * 
+	 *
 	 * @param InClass Class to search
 	 * @param Name Metadata key to search
 	 * @return found metadata value
 	 */
 	const FString* FindMetadataHierarchical(const UClass* InClass, const FName& Name);
 
-	
+
 	/**
 	 * Does pin have wildcard type set
 	 */
@@ -59,8 +59,8 @@ namespace EAA::Internals
 	bool IsCapturableType(const FEdGraphPinType& Type);
 
 	/**
-	 * Identify property type for the pin 
-	 * @param Pin 
+	 * Identify property type for the pin
+	 * @param Pin
 	 * @return if identification was successful
 	 */
 	FPropertyTypeInfo IdentifyPropertyTypeForPin(const UEdGraphPin* Pin);
@@ -68,25 +68,25 @@ namespace EAA::Internals
 
 	/**
 	 * Detect pin type for in/out pair.
-	 * 
-	 * @param InputPin 
-	 * @param OutputPin 
-	 
+	 *
+	 * @param InputPin
+	 * @param OutputPin
+
 	 * @return shared type or wildcard
 	 */
 	FEdGraphPinType DeterminePinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin);
 
 	/**
-	 * Select matching library accessor 
-	 * @param Pin 
-	 * @param AccessType 
-	 * @param OutFunction 
-	 * @return 
+	 * Select matching library accessor
+	 * @param Pin
+	 * @param AccessType
+	 * @param OutFunction
+	 * @return
 	 */
 	bool SelectAccessorForType(UEdGraphPin* Pin, EAccessorRole AccessType, FName& OutFunction);
 	bool SelectAccessorForType(const FEdGraphPinType& PinType, EAccessorRole AccessType, FName& OutFunction);
 
 	void BuildDefaultCapturePins(UK2Node_EnhancedAsyncTaskBase* Node);
-	
+
 	FString BuildContextConfigString(const UK2Node_EnhancedAsyncTaskBase* Node, int32 NumCaptures);
 }

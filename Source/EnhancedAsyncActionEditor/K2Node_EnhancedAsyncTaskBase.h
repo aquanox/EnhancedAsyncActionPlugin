@@ -46,7 +46,7 @@ struct FEATCapturePinPair
 	{
 		return Dir == EGPD_Input ? InputPinName : OutputPinName;
 	}
-	
+
 	inline FName& NameOf(EEdGraphPinDirection Dir)
 	{
 		return Dir == EGPD_Input ? InputPinName : OutputPinName;
@@ -72,7 +72,7 @@ class UK2Node_EnhancedAsyncTaskBase : public UK2Node_BaseAsyncTask, public IK2No
 	GENERATED_BODY()
 public:
 	UK2Node_EnhancedAsyncTaskBase();
-	
+
 	virtual void GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const override;
 	virtual void GetNodeContextMenuActions(UToolMenu* Menu, UGraphNodeContextMenuContext* Context) const override;
 
@@ -89,7 +89,7 @@ public:
 	bool HasAnyCapturePins() const { return NumCaptures > 0; }
 	bool HasAnyLinkedCaptures() const;
 	bool HasContextExposed() const;
-	
+
 	TArray<UEdGraphPin*> GetStandardPins(EEdGraphPinDirection Dir) const;
 
 	bool IsDynamicContainerType() const;
@@ -98,7 +98,7 @@ public:
 	UEdGraphPin* FindMatchingPin(const UEdGraphPin* Pin, EEdGraphPinDirection Dir) const;
 	bool IsCapturePin(const UEdGraphPin* Pin) const;
 	FName GetCapturePinName(EEdGraphPinDirection Dir, int32 PinIndex) const;
-	
+
 	bool IsContextPin(const UEdGraphPin* Pin) const;
 
 	virtual bool CanSplitPin(const UEdGraphPin* Pin) const override;
@@ -182,13 +182,13 @@ public:
 
 protected:
 	friend struct FEAATestAccessor;
-	
+
 	// async context property in delegates
 	UPROPERTY()
 	FName AsyncContextParameterName;
 	// marks context pin visible in graph
 	UPROPERTY()
-	bool bExposeContextParameter = false;	
+	bool bExposeContextParameter = false;
 	// type of context container
 	UPROPERTY()
 	TObjectPtr<UScriptStruct> AsyncContextContainerType;

@@ -115,7 +115,7 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 	FPropertyTypeInfo TypeInfo;
 
 	const FName& PinCategory = Type.PinCategory;
-	
+
 	if (PinCategory == UEdGraphSchema_K2::PC_Wildcard)
 		return FPropertyTypeInfo::Wildcard;
 	if (PinCategory == UEdGraphSchema_K2::PC_Exec
@@ -261,14 +261,14 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 		// todo: maps
 		ensureAlways(false);
 	}
-	
+
 	return TypeInfo;
 }
 
 FEdGraphPinType EAA::Internals::DeterminePinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
 {
 	static const FEdGraphPinType WildcardPinType = FEdGraphPinType(UEdGraphSchema_K2::PC_Wildcard, NAME_None, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
-	
+
 	auto ExpectedPinType = [](UEdGraphPin* LocalPin) -> FEdGraphPinType
 	{
 		if (LocalPin->LinkedTo.Num() == 0)
@@ -312,7 +312,7 @@ bool EAA::Internals::SelectAccessorForType(const FEdGraphPinType& PinType, EAcce
 
 void EAA::Internals::BuildDefaultCapturePins(UK2Node_EnhancedAsyncTaskBase* Node)
 {
-	
+
 }
 
 FString EAA::Internals::BuildContextConfigString(const UK2Node_EnhancedAsyncTaskBase* Node, int32 NumCaptures)
@@ -322,7 +322,7 @@ FString EAA::Internals::BuildContextConfigString(const UK2Node_EnhancedAsyncTask
 	{
 		auto* InPin = Node->FindCapturePin(EGPD_Input, Index);
 		auto* OutPin = Node->FindCapturePin(EGPD_Output, Index);
-			
+
 		auto DetectedPinType = EAA::Internals::DeterminePinType(InPin, OutPin);
 
 		if (BuilderBase.Len())  BuilderBase.Append(TEXT(";"));

@@ -20,7 +20,7 @@ public:
 	virtual bool IsValid() const override { return true; }
 
 	static void HandleStubCall();
-	
+
 #define CONTEXT_PROPERTY_ACCESSOR_MODE override { HandleStubCall(); }
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Bool, bool)
 	CONTEXT_DECLARE_SIMPLE_ACCESSOR(Byte, uint8)
@@ -98,7 +98,7 @@ protected:
 class UE_API FEnhancedAsyncActionContext_PropertyBagRef : public FEnhancedAsyncActionContext_PropertyBagBase
 {
 	using Super = FEnhancedAsyncActionContext_PropertyBagBase;
-public:		
+public:
 	FEnhancedAsyncActionContext_PropertyBagRef(const UObject* OwningObject, FName PropertyName);
 
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBagRef"); }
@@ -115,7 +115,7 @@ protected:
 class UE_API FEnhancedAsyncActionContext_PropertyBag : public FEnhancedAsyncActionContext_PropertyBagBase
 {
 	using Super = FEnhancedAsyncActionContext_PropertyBagBase;
-public:		
+public:
 	FEnhancedAsyncActionContext_PropertyBag(const UObject* OwningObject);
 
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBag"); }

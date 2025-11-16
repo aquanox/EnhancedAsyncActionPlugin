@@ -9,7 +9,7 @@
 #define UE_API ENHANCEDASYNCACTIONEDITOR_API
 
 /**
- * 
+ *
  */
 UCLASS()
 class UE_API UK2Node_EnhancedAsyncAction : public UK2Node_EnhancedAsyncTaskBase

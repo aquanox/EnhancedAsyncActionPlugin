@@ -15,7 +15,7 @@ enum class EPropertyBagPropertyType : uint8;
 
 #define CONTEXT_DECLARE_SIMPLE_ACCESSOR(Name, Type) \
 	virtual void SetValue ##Name(int32 Index, Type const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-	virtual void GetValue ##Name(int32 Index, Type& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE; 
+	virtual void GetValue ##Name(int32 Index, Type& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
 
 #define CONTEXT_DECLARE_ENUM_ACCESSOR(Name) \
 	virtual void SetValue ##Name(int32 Index, UEnum* ExpectedType, uint8 InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
@@ -52,10 +52,10 @@ struct UE_API FPropertyTypeInfo
 {
 	static const FPropertyTypeInfo Wildcard;
 	static const FPropertyTypeInfo Invalid;
-		
+
 	// container
 	EPropertyBagContainerType ContainerType;
-		
+
 	EPropertyBagPropertyType ValueType; // for singles
 	TObjectPtr<const UObject> ValueTypeObject;
 
@@ -64,14 +64,16 @@ struct UE_API FPropertyTypeInfo
 
 	FPropertyTypeInfo();
 	// normal
-	FPropertyTypeInfo(EPropertyBagPropertyType Type);
+	explicit FPropertyTypeInfo(EPropertyBagPropertyType Type);
+	// from reflection
+	explicit FPropertyTypeInfo(const FProperty* ExistingProperty);
 	// normal
 	FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object);
 	// array or set
 	FPropertyTypeInfo(EPropertyBagContainerType Container, EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object);
 	// map
 	FPropertyTypeInfo(EPropertyBagContainerType Container, EPropertyBagPropertyType KeyType, EPropertyBagPropertyType ValueType);
-		
+
 	bool IsWildcard() const;
 
 	bool IsValid() const;
@@ -86,10 +88,8 @@ struct UE_API FPropertyTypeInfo
 	static bool ParseTypeInfo(FString Data, FPropertyTypeInfo& TypeInfo);
 };
 
-
 /**
  * Async action context data container that is held by manager
- *
  */
 struct UE_API FEnhancedAsyncActionContext
 {
@@ -98,7 +98,7 @@ struct UE_API FEnhancedAsyncActionContext
 
 	virtual void SetupFromStringDefinition(const FString& InDefinition) {}
 	virtual void SetupFromProperties(TConstArrayView<TPair<FName, const FProperty*>> Properties) {}
-	
+
 	virtual bool IsValid() const = 0;
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) {}
 
@@ -136,7 +136,7 @@ protected:
 	bool bSetupContextAllowed = true;
 };
 
-// Wrapper over actual context data for blueprints 
+// Wrapper over actual context data for blueprints
 USTRUCT(BlueprintType, meta=(DisableSplitPin))
 struct UE_API FEnhancedAsyncActionContextHandle
 {
@@ -144,7 +144,6 @@ struct UE_API FEnhancedAsyncActionContextHandle
 public:
 	FEnhancedAsyncActionContextHandle() = default;
 	FEnhancedAsyncActionContextHandle(UObject* Owner, TSharedRef<FEnhancedAsyncActionContext> Ctx);
-	FEnhancedAsyncActionContextHandle(UObject* Owner, FName InDataProp, TSharedRef<FEnhancedAsyncActionContext> Ctx);
 
 	/** Is handle valid (has valid owning object and data) */
 	bool IsValid() const;
@@ -152,13 +151,12 @@ public:
 	bool IsExternal() const;
 private:
 	friend class FEnhancedAsyncActionManager;
-	friend class UEnhancedAsyncActionContextLibrary;
 
 	UPROPERTY()
 	TWeakObjectPtr<UObject> Owner;
 	UPROPERTY()
 	FName DataProperty;
-	
+
 	TWeakPtr<FEnhancedAsyncActionContext> Data;
 };
 

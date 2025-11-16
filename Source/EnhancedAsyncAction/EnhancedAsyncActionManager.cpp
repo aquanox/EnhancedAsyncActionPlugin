@@ -4,29 +4,73 @@
 #include "EnhancedAsyncActionContext.h"
 #include "EnhancedAsyncActionContextImpl.h"
 #include "Misc/CoreDelegates.h"
-
-static FEnhancedAsyncActionManager Manager;
+#include "Misc/ScopeLock.h"
 
 FEnhancedAsyncActionManager::FEnhancedAsyncActionManager()
 	: DummyContext(MakeShared<FEnhancedAsyncActionContextStub>())
 {
-	FCoreDelegates::OnEnginePreExit.AddRaw(this, &FEnhancedAsyncActionManager::OnEngineShutdown);
 }
 
 FEnhancedAsyncActionManager::~FEnhancedAsyncActionManager()
 {
-	FCoreDelegates::OnEnginePreExit.RemoveAll(this);
+	check(ActionContexts.Num() == 0);
+	check(!ObjectCollector.IsValid());
 }
 
 FEnhancedAsyncActionManager& FEnhancedAsyncActionManager::Get()
 {
+	static FEnhancedAsyncActionManager Manager;
 	return Manager;
+}
+
+TValueOrError<FEnhancedAsyncActionContextHandle, FString> FEnhancedAsyncActionManager::CreateContext(const FCreateContextParams& Params)
+{
+	FScopeLock Lock(&MapCriticalSection);
+
+	const UObject* Action = Params.Action;
+	if (!IsValid(Action))
+	{
+		return MakeError(TEXT("Invalid action object"));
+	}
+
+	auto* ExistingHandle = ActionContexts.Find(Action);
+	if (ExistingHandle)
+	{
+		return MakeError(TEXT("Object already has bound context"));
+	}
+
+	TSharedPtr<FEnhancedAsyncActionContext> Context;
+
+	FName InDataProperty = Params.InnerProperty;
+	if (EAA::Internals::IsValidContainerProperty(Action, InDataProperty))
+	{
+		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBagRef>(Action, InDataProperty);
+	}
+	else
+	{
+		if (!InDataProperty.IsNone())
+		{
+			UE_LOG(LogEnhancedAction, Log, TEXT("Missing expected member property %s:%s"), *Action->GetClass()->GetName(), *InDataProperty.ToString());
+			InDataProperty = NAME_None;
+		}
+
+		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBag>(Action);
+	}
+
+	if (!Context.IsValid())
+	{
+		return MakeError(TEXT("Failed to select context backend implementation"));
+	}
+
+	FEnhancedAsyncActionContextHandle Handle = SetContext(Action, Context.ToSharedRef());
+	Handle.DataProperty = InDataProperty;
+	return MakeValue(Handle);
 }
 
 FEnhancedAsyncActionContextHandle FEnhancedAsyncActionManager::SetContext(const UObject* Action, TSharedRef<FEnhancedAsyncActionContext> Context)
 {
-	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
-	
+	FScopeLock Lock(&MapCriticalSection);
+
 	if (ActionContexts.Num() == 0)
 	{
 		EnableListener();
@@ -38,34 +82,9 @@ FEnhancedAsyncActionContextHandle FEnhancedAsyncActionManager::SetContext(const 
 	return FEnhancedAsyncActionContextHandle { const_cast<UObject*>(Action), Context };
 }
 
-void FEnhancedAsyncActionManager::OnObjectDeleted(const UObject* Object)
-{
-	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
-	if (ActionContexts.Remove(Object) > 0)
-	{
-		if (ActionContexts.Num() == 0)
-		{
-			DisableListener();
-		}
-	}
-}
-
-void FEnhancedAsyncActionManager::OnEngineShutdown()
-{
-	OnShutdown();
-	FCoreDelegates::OnEnginePreExit.RemoveAll(this);
-}
-
-void FEnhancedAsyncActionManager::OnShutdown()
-{
-	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
-	DisableListener();
-	ActionContexts.Empty();
-}
-
 FEnhancedAsyncActionContextHandle FEnhancedAsyncActionManager::FindContextHandle(const UObject* Action)
 {
-	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
+	FScopeLock Lock(&MapCriticalSection);
 
 	if (auto* ContextObject = ActionContexts.Find(Action))
 	{
@@ -76,7 +95,7 @@ FEnhancedAsyncActionContextHandle FEnhancedAsyncActionManager::FindContextHandle
 
 TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContext(const UObject* Action)
 {
-	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
+	FScopeLock Lock(&MapCriticalSection);
 
 	if (auto* ContextObject = ActionContexts.Find(Action))
 	{
@@ -87,7 +106,7 @@ TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContext
 
 TSharedRef<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContextSafe(const UObject* Action)
 {
-	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
+	FScopeLock Lock(&MapCriticalSection);
 
 	if (auto* ContextObject = ActionContexts.Find(Action))
 	{
@@ -103,7 +122,7 @@ TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContext
 		return nullptr;
 	}
 	auto ActualContext = Handle.Data.Pin();
-	
+
 	if (!ActualContext || !ActualContext->IsValid())
 	{ // implementation is bad (like inner uobject member ref)
 		return nullptr;
@@ -117,9 +136,14 @@ TSharedRef<FEnhancedAsyncActionContext> FEnhancedAsyncActionManager::FindContext
 	return ActualContext ? ActualContext.ToSharedRef() : DummyContext;
 }
 
+void FEnhancedAsyncActionManager::FGCCollector::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	Owner->AddReferencedObjects(Collector);
+}
+
 void FEnhancedAsyncActionManager::AddReferencedObjects(FReferenceCollector& Collector)
 {
-	FTransactionallySafeScopeLock Lock(&MapCriticalSection);
+	FScopeLock Lock(&MapCriticalSection);
 	for (auto It = ActionContexts.CreateIterator(); It; ++It)
 	{
 		if (It->Value->CanAddReferencedObjects() && It->Value->IsValid())
@@ -131,17 +155,42 @@ void FEnhancedAsyncActionManager::AddReferencedObjects(FReferenceCollector& Coll
 
 void FEnhancedAsyncActionManager::FObjectListener::NotifyUObjectDeleted(const UObjectBase* Object, int32 Index)
 {
-	FEnhancedAsyncActionManager::Get().OnObjectDeleted(static_cast<const UObject*>(Object));
+	Owner->OnObjectDeleted(static_cast<const UObject*>(Object));
+}
+
+void FEnhancedAsyncActionManager::OnObjectDeleted(const UObject* Object)
+{
+	FScopeLock Lock(&MapCriticalSection);
+	if (ActionContexts.Remove(Object) > 0)
+	{
+		if (ActionContexts.Num() == 0)
+		{
+			DisableListener();
+		}
+	}
 }
 
 void FEnhancedAsyncActionManager::FObjectListener::OnUObjectArrayShutdown()
 {
-	FEnhancedAsyncActionManager::Get().OnShutdown();
+	Owner->OnShutdown();
+}
+
+void FEnhancedAsyncActionManager::OnShutdown()
+{
+	FScopeLock Lock(&MapCriticalSection);
+	DisableListener();
+	ObjectCollector.Reset();
+	ActionContexts.Empty();
 }
 
 void FEnhancedAsyncActionManager::EnableListener()
 {
 	GUObjectArray.AddUObjectDeleteListener(&ObjectListener);
+
+	if (!ObjectCollector.IsValid())
+	{
+		ObjectCollector = MakeShared<FGCCollector>(this);
+	}
 }
 
 void FEnhancedAsyncActionManager::DisableListener()

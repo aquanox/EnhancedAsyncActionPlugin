@@ -41,7 +41,7 @@ bool FEAALibraryTestCreate::RunTest(FString const&)
 	UTEST_TRUE_EXPR(TaskContainerHandleBadProp.IsValid());
 	UTEST_TRUE_EXPR(TaskContainerHandleBadProp.IsExternal());
 
-	auto DebugHandle = UEnhancedAsyncActionContextLibrary::GetTestCaptureContext(World);
+	auto DebugHandle = UEnhancedAsyncActionContextLibrary::CreateContextForObject(World);
 	UTEST_TRUE_EXPR(DebugHandle.IsValid());
 	UTEST_TRUE_EXPR(DebugHandle.IsExternal());
 
@@ -78,7 +78,7 @@ bool FEAALibraryOpsBasic::RunTest(FString const&)
 	{ FString V; Lib::Handle_GetValue_String(Handle, Test_Prop_String, V); UTEST_TRUE_EXPR(V == FString("foo")); }
 	{ FName V; Lib::Handle_GetValue_Name(Handle, Test_Prop_Name, V); UTEST_TRUE_EXPR(V == FName("bar")); }
 	{ FText V; Lib::Handle_GetValue_Text(Handle, Test_Prop_Text, V); UTEST_TRUE_EXPR(V.ToString() == FString("baz")); }
-	
+
 	return true;
 }
 
@@ -96,11 +96,11 @@ bool FEAALibraryOpsComplex::RunTest(FString const&)
 
 	TSharedPtr<FEnhancedAsyncActionContext> Context = FEnhancedAsyncActionManager::Get().FindContext(Handle);
 	UTEST_TRUE_EXPR(Context.IsValid());
-	
+
 	{
 		const FEAACaptureContext StructValue { TEXT("foo"), 42, Owner };
 		UScriptStruct* const StructType = StaticStruct<FEAACaptureContext>();
-		
+
 		Context->SetValueStruct(Test_Prop_Struct,
 		                        StructType,
 		                        reinterpret_cast<const uint8*>(&StructValue));
@@ -111,7 +111,7 @@ bool FEAALibraryOpsComplex::RunTest(FString const&)
 
 		FEAACaptureContext OutputStruct;
 		StructType->CopyScriptStruct(&OutputStruct, Output);
-		
+
 		UTEST_TRUE_EXPR(StructType->CompareScriptStruct(&StructValue, &OutputStruct, PPF_None) == true);
 	}
 
@@ -129,7 +129,7 @@ bool FEAALibraryOpsComplex::RunTest(FString const&)
 	{
 		UObject* const  Object = Owner;
 		UClass* const ObjectType = UObject::StaticClass();
-		
+
 		Context->SetValueObject(Test_Prop_Object, ObjectType, Object);
 
 		UObject* Output;

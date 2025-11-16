@@ -27,32 +27,17 @@
 
 FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::CreateContextForObject(const UObject* Action, FName InDataProperty)
 {
-	if (!IsValid(Action))
+	FEnhancedAsyncActionManager::FCreateContextParams Params;
+	Params.Action = Action;
+	Params.InnerProperty = InDataProperty;
+
+	auto ValueOrError = FEnhancedAsyncActionManager::Get().CreateContext(Params);
+	if (ValueOrError.HasError())
 	{
-		// FFrame::KismetExecutionMessage(TEXT("CreateContextForObject failed for node"), ELogVerbosity::Error, TEXT("EAA_CreateContextForAction"));
-		UE_LOG(LogEnhancedAction, Log, TEXT("CreateContextForObject failed for node"));
+		UE_LOG(LogEnhancedAction, Log, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedAsyncActionContextHandle();
 	}
-
-	TSharedPtr<FEnhancedAsyncActionContext> Context;
-	
-	if (EAA::Internals::IsValidContainerProperty(Action, InDataProperty))
-	{
-		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBagRef>(Action, InDataProperty);
-	}
-	else
-	{
-		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBag>(Action);
-		if (!InDataProperty.IsNone())
-		{
-			UE_LOG(LogEnhancedAction, Log, TEXT("Missing expected member property %s:%s"), *Action->GetClass()->GetName(), *InDataProperty.ToString());
-			InDataProperty = NAME_None;
-		}
-	}
-
-	FEnhancedAsyncActionContextHandle Handle = FEnhancedAsyncActionManager::Get().SetContext(Action, Context.ToSharedRef());
-	Handle.DataProperty = InDataProperty;
-	return Handle;
+	return ValueOrError.GetValue();
 }
 
 void UEnhancedAsyncActionContextLibrary::SetupContextContainer(const FEnhancedAsyncActionContextHandle& Handle, FString Config)
@@ -74,17 +59,6 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::GetContext
 		FFrame::KismetExecutionMessage(TEXT("GetContextForObject failed for node"), ELogVerbosity::Error, TEXT("EAA_GetCaptureContext"));
 	}
 	return Context;
-}
-
-FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::GetTestCaptureContext(const UObject* WorldContextObject)
-{
-	const UWorld* Context = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
-	FEnhancedAsyncActionContextHandle ContextHandle = FEnhancedAsyncActionManager::Get().FindContextHandle(Context);
-	if (!ContextHandle.IsValid())
-	{
-		ContextHandle = FEnhancedAsyncActionManager::Get().SetContext(Context, MakeShared<FEnhancedAsyncActionContext_PropertyBag>(Context));
-	}
-	return ContextHandle;
 }
 
 void UEnhancedAsyncActionContextLibrary::DumpContextForObject(const UObject* Action)
@@ -109,18 +83,18 @@ void UEnhancedAsyncActionContextLibrary::DumpContext(const FEnhancedAsyncActionC
 
 void UEnhancedAsyncActionContextLibrary::FindCaptureContextForObject(const UObject* Action, FEnhancedAsyncActionContextHandle& Handle, bool& Valid)
 {
-	Handle = FEnhancedAsyncActionManager::Get().FindContextHandle(Action);
-	Valid = Handle.IsValid();
+	Valid = false;
+	if (IsValid(Action))
+	{
+		Handle = FEnhancedAsyncActionManager::Get().FindContextHandle(Action);
+		Valid = Handle.IsValid();
+	}
 }
 
 bool UEnhancedAsyncActionContextLibrary::IsValidContext(const FEnhancedAsyncActionContextHandle& Handle)
 {
 	return Handle.IsValid();
 }
-
-// UE_LOGFMT(LogEnhancedAction, Log, "{Func} set {Index} => {Value}", __FUNCTIONW__, Index, Value);
-//
-// UE_LOGFMT(LogEnhancedAction, Log, "{Func} get {Index} => {Value}", __FUNCTIONW__, Index, Value);
 
 // =================== SETTERS ===========================
 
@@ -188,7 +162,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Variadic
 	for (int32 Index = 0; Index < Parameters.Num(); ++Index)
 	{
 		const FString& InputName = Parameters[Index];
-		
+
 		Stack.MostRecentProperty = nullptr;
 		Stack.MostRecentPropertyAddress = nullptr;
 		Stack.StepCompiledIn<FProperty>(nullptr);
@@ -211,7 +185,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Variadic
 	{
 		ContextSafe->SetupFromProperties(SetupInputs);
 	}
-	
+
 	for (const FInputParam& Input : VarInputs)
 	{
 		FString Message;
@@ -272,7 +246,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Enum)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	
+
 	uint8 ParamValue = 0;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
@@ -297,7 +271,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Struct)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	
+
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
@@ -305,9 +279,9 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Struct)
 	const FStructProperty* ParamValueProp = CastField<FStructProperty>(Stack.MostRecentProperty);
 	const void* ParamValue = Stack.MostRecentPropertyAddress;
 	P_FINISH;
-	
+
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr && ParamValue != nullptr, "Failed to resolve the Value Property for Set Value Struct");
-	
+
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->SetValueStruct(ParamIndex, ParamValueProp->Struct, (const uint8*)ParamValue);
@@ -328,7 +302,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Object)
 	P_FINISH;
 
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Object");
-	
+
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->SetValueObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
@@ -349,7 +323,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftObje
 	P_FINISH;
 
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Soft Object");
-	
+
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->SetValueSoftObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
@@ -370,7 +344,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Class)
 	P_FINISH;
 
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Class");
-	
+
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->SetValueClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
@@ -389,9 +363,9 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftClas
 	P_GET_SOFTCLASS(TSoftClassPtr<UObject> ,ParamValue);
 	const FSoftClassProperty* ParamValueProp = CastField<FSoftClassProperty>(Stack.MostRecentProperty);
 	P_FINISH;
-	
+
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Class");
-	
+
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->SetValueSoftClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
@@ -407,12 +381,12 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Array)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	
+
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FArrayProperty>(nullptr);
-	
+
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
 	const void* ArrayAddr = Stack.MostRecentPropertyAddress;
 	const void* ArrayContainerAddr = Stack.MostRecentPropertyContainer;
@@ -439,17 +413,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	
+
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FSetProperty>(NULL);
-	
+
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
 	const void* SetAddr = Stack.MostRecentPropertyAddress;
 	const void* SetContainerAddr = Stack.MostRecentPropertyContainer;
 	P_FINISH;
-	
+
 	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
 
 	P_NATIVE_BEGIN;
@@ -529,7 +503,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Variadic
     for (int32 Index = 0; Index < Parameters.Num(); ++Index)
     {
     	const FString& InputName = Parameters[Index];
-    	
+
     	Stack.MostRecentProperty = nullptr;
     	Stack.MostRecentPropertyAddress = nullptr;
     	Stack.StepCompiledIn<FProperty>(nullptr);
@@ -565,36 +539,36 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Variadic
 
 void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
 {
-	
+
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Generic)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
 	P_GET_PROPERTY(FIntProperty, ParamIndex);
-	
+
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FProperty>(nullptr);
-	
+
 	const FProperty* ValueProp = CastField<FProperty>(Stack.MostRecentProperty);
 	void* ValuePtr = Stack.MostRecentPropertyAddress;
-	
+
 	P_FINISH;
 
 	EAA_KISMET_ENSURE(ValueProp != nullptr && ValuePtr != nullptr, "Failed to resolve the Value Property for Get Value Generic");
-	
+
 	P_NATIVE_BEGIN;
-	
+
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
-	
+
 	FString Message;
 	if (!ensureAlways(ContextSafe->GetValueByIndex(ParamIndex, ValueProp, ValuePtr, Message)))
 	{
 		FBlueprintExceptionInfo ExceptionInfo(EBlueprintExceptionType::AbortExecution,  FText::FromString(Message) );
 		FBlueprintCoreDelegates::ThrowScriptException(P_THIS, Stack, ExceptionInfo);
 	}
-	
+
 	P_NATIVE_END;
 }
 
@@ -609,7 +583,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Enum)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	uint8 ExecResultTemp = 0;
-	
+
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	uint8& ParamValue = Stack.StepCompiledInRef<FEnumProperty, uint8>(&ExecResultTemp);
@@ -633,16 +607,16 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Struct)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	
+
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FStructProperty>(nullptr);
-	
+
 	const FStructProperty* ParamValueProp = CastField<FStructProperty>(Stack.MostRecentProperty);
 	void* ParamValue = Stack.MostRecentPropertyAddress;
 	P_FINISH;
-	
+
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr && ParamValue != nullptr, "Unsupported property type the Value for Set Value Struct");
 
 	P_NATIVE_BEGIN;
@@ -668,9 +642,9 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Object)
 	P_GET_OBJECT_REF(UObject,ParamValue);
 	const FObjectProperty* ParamValueProp = CastField<FObjectProperty>(Stack.MostRecentProperty);
 	P_FINISH;
-	
+
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Object");
-	
+
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
 	ContextSafe->GetValueObject(ParamIndex, ParamValueProp->PropertyClass, P_ARG_GC_BARRIER(ParamValue));
@@ -689,7 +663,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftObje
 	P_GET_SOFTOBJECT_REF(TSoftObjectPtr<UObject>,ParamValue);
 	const FSoftObjectProperty* ParamValueProp = CastField<FSoftObjectProperty>(Stack.MostRecentProperty);
 	P_FINISH;
-	
+
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Get Value Soft Object");
 
 	P_NATIVE_BEGIN;
@@ -710,7 +684,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Class)
 	P_GET_OBJECT_REF(UClass,ParamValue);
 	const FClassProperty* ParamValueProp = CastField<FClassProperty>(Stack.MostRecentProperty);
 	P_FINISH;
-	
+
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Class");
 
 	P_NATIVE_BEGIN;
@@ -731,7 +705,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftClas
 	P_GET_SOFTCLASS_REF(TSoftClassPtr<UObject>,ParamValue);
 	const FSoftClassProperty* ParamValueProp = CastField<FSoftClassProperty>(Stack.MostRecentProperty);
 	P_FINISH;
-	
+
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Get Value Soft Class");
 
 	P_NATIVE_BEGIN;
@@ -749,17 +723,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Array)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	
+
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FArrayProperty>(nullptr);
-	
+
 	FArrayProperty* ArrayProperty = CastField<FArrayProperty>(Stack.MostRecentProperty);
 	void* ArrayAddr = Stack.MostRecentPropertyAddress;
 	void* ArrayContainerAddr = Stack.MostRecentPropertyContainer;
 	P_FINISH;
-	
+
 	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr && ArrayAddr != nullptr);
 
 	P_NATIVE_BEGIN;
@@ -782,7 +756,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Set)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
-	
+
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
