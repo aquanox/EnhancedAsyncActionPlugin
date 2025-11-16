@@ -4,22 +4,18 @@
 
 #include "EnhancedAsyncActionManager.h"
 #include "EnhancedAsyncActionShared.h"
-#include "StructUtils/StructView.h"
 #include "StructUtils/PropertyBag.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedAsyncActionContext)
 
-const FPropertyTypeInfo FPropertyTypeInfo::Invalid(EPropertyBagContainerType::Count, EPropertyBagPropertyType::Count, EPropertyBagPropertyType::Count);
-const FPropertyTypeInfo FPropertyTypeInfo::Wildcard(EPropertyBagContainerType::None, EPropertyBagPropertyType::None, EPropertyBagPropertyType::None);
+const FPropertyTypeInfo FPropertyTypeInfo::Invalid(FPropertyTypeInfo::EInternalPreset::PRESET_Invalid);
+const FPropertyTypeInfo FPropertyTypeInfo::Wildcard(FPropertyTypeInfo::EInternalPreset::PRESET_Wildcard);
 
 static const FString EnumPrefix = TEXT("EPropertyBagPropertyType::");
 
 bool FPropertyTypeInfo::IsWildcard() const
 {
-	return ContainerType == EPropertyBagContainerType::None
-		&& ValueType == EPropertyBagPropertyType::None
-		&& KeyType == EPropertyBagPropertyType::None;
-
+	return *this == Wildcard;
 }
 
 bool FPropertyTypeInfo::IsValid() const
@@ -48,7 +44,7 @@ FString FPropertyTypeInfo::EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo)
 		Builder.Append(TEXT("S:"));
 		break;
 	// TODO: maps supported in 5.8
-	// case EPropertyBagContainerType::Count:
+	// case EPropertyBagContainerType::Map:
 		// Builder.Append(TEXT("M:"));
 		// break;
 	}
@@ -151,18 +147,23 @@ FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<c
 {
 }
 
-FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagContainerType Container, EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object)
-	: ContainerType(Container)
-	, ValueType(Type), ValueTypeObject(Object)
-	, KeyType(EPropertyBagPropertyType::None)
+FPropertyTypeInfo::FPropertyTypeInfo(EInternalPreset Preset)
 {
-}
-
-FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagContainerType Container, EPropertyBagPropertyType KeyType, EPropertyBagPropertyType ValueType)
-	: ContainerType(Container)
-	, ValueType(ValueType)
-	, KeyType(KeyType)
-{
+	switch (Preset)
+	{
+	case PRESET_Wildcard:
+		ContainerType = EPropertyBagContainerType::None;
+		KeyType = ValueType = EPropertyBagPropertyType::None;
+		KeyTypeObject = ValueTypeObject = nullptr;
+		break;
+	case PRESET_Invalid:
+		ContainerType = EPropertyBagContainerType::Count;
+		KeyType = ValueType = EPropertyBagPropertyType::Count;
+		KeyTypeObject = ValueTypeObject = nullptr;
+		break;
+	default:
+		break;
+	}
 }
 
 bool FEnhancedAsyncActionContext::SetValueByIndex(int32 Index, const FProperty* Property, const void* Value, FString& Message)

@@ -5,6 +5,7 @@
 #include "StructUtils/PropertyBag.h"
 #include "UObject/Class.h"
 #include "UObject/UnrealType.h"
+#include "UObject/TextProperty.h"
 #include "EnhancedAsyncActionContextLibrary.h"
 
 DEFINE_LOG_CATEGORY(LogEnhancedAction);

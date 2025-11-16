@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "EnhancedAsyncActionContext.h"
 #include "EnhancedAsyncActionContextLibrary.generated.h"

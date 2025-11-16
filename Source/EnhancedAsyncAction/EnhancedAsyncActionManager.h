@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "UObject/GCObject.h"
 #include "UObject/UObjectArray.h"
 #include "HAL/CriticalSection.h"

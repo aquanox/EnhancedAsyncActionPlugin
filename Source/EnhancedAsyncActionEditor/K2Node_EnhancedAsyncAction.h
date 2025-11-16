@@ -2,11 +2,12 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "K2Node_EnhancedAsyncTaskBase.h"
 #include "K2Node_EnhancedAsyncAction.generated.h"
 
 #define UE_API ENHANCEDASYNCACTIONEDITOR_API
+
+class FBlueprintActionDatabaseRegistrar;
 
 /**
  *

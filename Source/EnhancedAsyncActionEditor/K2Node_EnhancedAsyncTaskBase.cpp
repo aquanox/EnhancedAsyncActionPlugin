@@ -220,7 +220,7 @@ void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultPins()
 		);
 		Out->SourceIndex = Index;
 
-		Captures.Add(FEATCapturePinPair(Index, In, Out));
+		Captures.Add(FEnhancedAsyncTaskCapture(Index, In, Out));
 	}
 }
 
@@ -249,7 +249,7 @@ void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultCapturePinsForStruct(const US
 
 		if (bInGood && bOutGood)
 		{
-			Captures.Add(FEATCapturePinPair(Index, Property->GetFName(), In, Out));
+			Captures.Add(FEnhancedAsyncTaskCapture(Index, Property->GetFName(), In, Out));
 		}
 	}
 
@@ -393,7 +393,7 @@ void UK2Node_EnhancedAsyncTaskBase::SyncPinNames()
 	{
 		for (int32 Index = 0; Index < Captures.Num(); ++Index)
 		{
-			FEATCapturePinPair& CaptureInfo = Captures[Index];
+			FEnhancedAsyncTaskCapture& CaptureInfo = Captures[Index];
 
 			UEdGraphPin* InPin = CaptureInfo.FindPinChecked(EGPD_Input, this);
 			UEdGraphPin* OutPin = CaptureInfo.FindPinChecked(EGPD_Output, this);
@@ -500,7 +500,7 @@ void UK2Node_EnhancedAsyncTaskBase::AddInputPin()
 							GetCapturePinName(EEdGraphPinDirection::EGPD_Output, Index)
 	);
 
-	Captures.Add(FEATCapturePinPair(Index, NAME_None, In, Out));
+	Captures.Add(FEnhancedAsyncTaskCapture(Index, NAME_None, In, Out));
 
 	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
 }
@@ -529,7 +529,7 @@ void UK2Node_EnhancedAsyncTaskBase::RemoveInputPin(UEdGraphPin* Pin)
 	UEdGraphPin* OutPin = FindMatchingPin(Pin, EEdGraphPinDirection::EGPD_Output);
 	check(InPin && OutPin);
 
-	int32 CaptureIndex = Captures.IndexOfByPredicate([InPin, OutPin](const FEATCapturePinPair& Pair) {
+	int32 CaptureIndex = Captures.IndexOfByPredicate([InPin, OutPin](const FEnhancedAsyncTaskCapture& Pair) {
 		return Pair.InputPinName == InPin->PinName && Pair.OutputPinName == OutPin->PinName;
 	});
 	check(CaptureIndex != INDEX_NONE);

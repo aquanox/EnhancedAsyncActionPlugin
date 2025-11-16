@@ -4,7 +4,6 @@
 
 #include "UObject/Object.h"
 #include "UObject/Class.h"
-#include "StructUtils/StructView.h"
 #include "EnhancedAsyncActionContext.generated.h"
 
 #define UE_API ENHANCEDASYNCACTION_API
@@ -67,12 +66,15 @@ struct UE_API FPropertyTypeInfo
 	explicit FPropertyTypeInfo(EPropertyBagPropertyType Type);
 	// from reflection
 	explicit FPropertyTypeInfo(const FProperty* ExistingProperty);
-	// normal
+	// simple
 	FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object);
-	// array or set
-	FPropertyTypeInfo(EPropertyBagContainerType Container, EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object);
-	// map
-	FPropertyTypeInfo(EPropertyBagContainerType Container, EPropertyBagPropertyType KeyType, EPropertyBagPropertyType ValueType);
+
+	//
+	enum EInternalPreset { PRESET_Wildcard, PRESET_Invalid };
+	explicit FPropertyTypeInfo(EInternalPreset Preset);
+
+	bool operator==(const FPropertyTypeInfo&) const = default;
+	bool operator!=(const FPropertyTypeInfo&) const = default;
 
 	bool IsWildcard() const;
 

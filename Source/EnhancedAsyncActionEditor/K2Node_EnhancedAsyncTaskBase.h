@@ -10,7 +10,7 @@
 class FKismetCompilerContext;
 
 USTRUCT()
-struct FEATCapturePinPair
+struct FEnhancedAsyncTaskCapture
 {
 	GENERATED_BODY()
 
@@ -23,15 +23,16 @@ struct FEATCapturePinPair
 	UPROPERTY()
 	FName OutputPinName;
 
-	FEATCapturePinPair() = default;
-	FEATCapturePinPair(int32 InIndex, UEdGraphPin* Input, UEdGraphPin* Output)
+	FEnhancedAsyncTaskCapture() = default;
+
+	FEnhancedAsyncTaskCapture(int32 InIndex, UEdGraphPin* Input, UEdGraphPin* Output)
 	{
 		Index = InIndex;
 		InputPinName = Input->PinName;
 		OutputPinName = Output->PinName;
 	}
 
-	FEATCapturePinPair(int32 InIndex, FName BoundName, UEdGraphPin* Input, UEdGraphPin* Output)
+	FEnhancedAsyncTaskCapture(int32 InIndex, FName BoundName, UEdGraphPin* Input, UEdGraphPin* Output)
 	{
 		Index = InIndex;
 		BoundPropertyName = BoundName;
@@ -200,5 +201,5 @@ protected:
 	int32 NumCaptures = 0;
 	// recorded data on capture pairs
 	UPROPERTY()
-	TArray<FEATCapturePinPair> Captures;
+	TArray<FEnhancedAsyncTaskCapture> Captures;
 };

@@ -4,11 +4,23 @@ using UnrealBuildTool;
 
 public class EnhancedAsyncActionTests : ModuleRules
 {
+	// This is to emulate engine installation and verify includes during development
+	// Gives effect similar to BuildPlugin with -StrictIncludes
+	public bool bStrictIncludesCheck = true;
+
 	public EnhancedAsyncActionTests(ReadOnlyTargetRules Target) : base(Target)
 	{
-		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-		bUseUnity = false;
+		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		if (bStrictIncludesCheck)
+		{
+			bUseUnity = false;
+			PCHUsage = PCHUsageMode.NoPCHs;
+			// Enable additional checks used for Engine modules
+			bTreatAsEngineModule = true;
+		}
+
+		// Disable Private/Public structure.
 		PublicIncludePaths.Add(ModuleDirectory);
 
 		PublicDependencyModuleNames.AddRange(

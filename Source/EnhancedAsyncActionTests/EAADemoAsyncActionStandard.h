@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Kismet/BlueprintAsyncActionBase.h"
 #include "StructUtils/InstancedStruct.h"
 #include "EAADemoAsyncActionStandard.generated.h"
@@ -14,7 +13,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FEAADemoStandardResult,
 );
 
 /**
- * Trivial async action "loading user data" 
+ * Trivial async action "loading user data"
  */
 UCLASS(MinimalAPI)
 class UEAADemoAsyncAction : public UBlueprintAsyncActionBase
@@ -29,10 +28,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="EAA|Demo", DisplayName="LoadStatsForUser", meta=( BlueprintInternalUseOnly=true,  WorldContext = "WorldContextObject"))
 	static UEAADemoAsyncAction* StartDemoAction(const UObject* WorldContextObject, int32 UserIndex);
-	
+
 	virtual void Activate() override;
 protected:
-	
+
 	UPROPERTY()
 	TObjectPtr<UWorld> LocalWorld;
 	UPROPERTY()

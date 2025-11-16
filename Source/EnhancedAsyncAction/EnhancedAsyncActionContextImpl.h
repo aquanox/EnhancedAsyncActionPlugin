@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "StructUtils/PropertyBag.h"
 #include "EnhancedAsyncActionShared.h"
 #include "EnhancedAsyncActionContext.h"
@@ -53,6 +52,7 @@ class UE_API FEnhancedAsyncActionContext_PropertyBagBase : public FEnhancedAsync
 	using Super = FEnhancedAsyncActionContext;
 public:
 	virtual ~FEnhancedAsyncActionContext_PropertyBagBase();
+
 	virtual bool IsValid() const override;
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 

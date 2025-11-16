@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "Kismet/BlueprintAsyncActionBase.h"
 #include "StructUtils/PropertyBag.h"
 #include "EAADemoAsyncAction.generated.h"
@@ -95,7 +94,7 @@ public:
 	static UEAADemoAsyncActionCaptureMember* StartActionWithCaptureFixed(const UObject* WorldContextObject, bool bDirectCall, const int32 UserIndex);
 
 private:
-	// any number of properties backed by bag 
+	// any number of properties backed by bag
 	UPROPERTY()
 	FInstancedPropertyBag ContextData;
 };

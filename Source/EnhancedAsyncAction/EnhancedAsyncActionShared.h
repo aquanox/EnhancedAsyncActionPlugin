@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
 #include "EnhancedAsyncActionContext.h"
 #include "UObject/Class.h"
 #include "UObject/Object.h"
