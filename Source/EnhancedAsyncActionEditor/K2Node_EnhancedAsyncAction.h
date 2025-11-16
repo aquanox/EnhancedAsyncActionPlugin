@@ -10,10 +10,10 @@
 class FBlueprintActionDatabaseRegistrar;
 
 /**
- *
+ * @see UK2Node_AsyncAction
  */
-UCLASS()
-class UE_API UK2Node_EnhancedAsyncAction : public UK2Node_EnhancedAsyncTaskBase
+UCLASS(MinimalAPI)
+class UK2Node_EnhancedAsyncAction : public UK2Node_EnhancedAsyncTaskBase
 {
 	GENERATED_BODY()
 public:

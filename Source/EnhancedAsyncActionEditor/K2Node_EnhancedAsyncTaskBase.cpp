@@ -9,7 +9,6 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_IfThenElse.h"
 #include "K2Node_TemporaryVariable.h"
-#include "Kismet/BlueprintAsyncActionBase.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "KismetCompiler.h"
@@ -144,8 +143,12 @@ bool UK2Node_EnhancedAsyncTaskBase::HasExternalDependencies(TArray<class UStruct
 
 FText UK2Node_EnhancedAsyncTaskBase::GetNodeTitle(ENodeTitleType::Type TitleType) const
 {
-	FText Base = Super::GetNodeTitle(TitleType);
-	return FText::Format(INVTEXT("{0} (Capture)"), Base);
+	if (EAA::Switches::bDebugTooltips)
+	{
+		FText Base = Super::GetNodeTitle(TitleType);
+		return FText::Format(INVTEXT("{0} (Capture)"), Base);
+	}
+	return Super::GetNodeTitle(TitleType);
 }
 
 FText UK2Node_EnhancedAsyncTaskBase::GetTooltipText() const
@@ -291,12 +294,6 @@ TArray<UEdGraphPin*> UK2Node_EnhancedAsyncTaskBase::GetStandardPins(EEdGraphPinD
 		}
 	}
 	return Result;
-}
-
-bool UK2Node_EnhancedAsyncTaskBase::IsDynamicContainerType() const
-{
-	return AsyncContextContainerType == nullptr
-		|| AsyncContextContainerType->IsChildOf(FInstancedPropertyBag::StaticStruct());
 }
 
 FName UK2Node_EnhancedAsyncTaskBase::GetCapturePinName(EEdGraphPinDirection Dir, int32 PinIndex) const
@@ -477,14 +474,12 @@ int32 UK2Node_EnhancedAsyncTaskBase::GetMaxCapturePinsNum()
 
 bool UK2Node_EnhancedAsyncTaskBase::CanAddPin() const
 {
-	return IsDynamicContainerType()
-		&& NumCaptures < GetMaxCapturePinsNum();
+	return NumCaptures < GetMaxCapturePinsNum();
 }
 
 void UK2Node_EnhancedAsyncTaskBase::AddInputPin()
 {
-	check(IsDynamicContainerType());
-
+	FScopedTransaction Transaction(LOCTEXT("AddPinTx", "AddPin"));
 	Modify();
 
 	const int32 Index = NumCaptures;
@@ -507,15 +502,11 @@ void UK2Node_EnhancedAsyncTaskBase::AddInputPin()
 
 bool UK2Node_EnhancedAsyncTaskBase::CanRemovePin(const UEdGraphPin* Pin) const
 {
-	return IsDynamicContainerType()
-		&& Pin
-		&& HasAnyCapturePins()
-		&& IsCapturePin(Pin);
+	return Pin && HasAnyCapturePins() && IsCapturePin(Pin);
 }
 
 void UK2Node_EnhancedAsyncTaskBase::RemoveInputPin(UEdGraphPin* Pin)
 {
-	check(IsDynamicContainerType());
 	check(Pin->ParentPin == nullptr);
 	checkSlow(Pins.Contains(Pin));
 

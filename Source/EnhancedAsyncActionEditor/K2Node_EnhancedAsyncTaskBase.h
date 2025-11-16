@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "K2NodeSharedTypes.h"
 #include "K2Node_AddPinInterface.h"
 #include "K2Node_AsyncAction.h"
 #include "K2Node_EnhancedAsyncTaskBase.generated.h"
@@ -66,8 +66,10 @@ struct FEnhancedAsyncTaskCapture
 
 /**
  * Base type for async nodes that support capture context
+ *
+ * @see UK2Node_BaseAsyncTask
  */
-UCLASS()
+UCLASS(MinimalAPI)
 class UK2Node_EnhancedAsyncTaskBase : public UK2Node_BaseAsyncTask, public IK2Node_AddPinInterface
 {
 	GENERATED_BODY()
@@ -92,8 +94,6 @@ public:
 	bool HasContextExposed() const;
 
 	TArray<UEdGraphPin*> GetStandardPins(EEdGraphPinDirection Dir) const;
-
-	bool IsDynamicContainerType() const;
 
 	UEdGraphPin* FindCapturePin(EEdGraphPinDirection Dir, int32 PinIndex) const;
 	UEdGraphPin* FindMatchingPin(const UEdGraphPin* Pin, EEdGraphPinDirection Dir) const;
