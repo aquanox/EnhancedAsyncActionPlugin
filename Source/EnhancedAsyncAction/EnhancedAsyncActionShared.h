@@ -20,6 +20,8 @@ namespace EAA::Switches
 	constexpr bool bDebugTooltips = false;
 	// uses variadic set/get function instead of multiple single get/set
 	constexpr bool bVariadicGetSet = true;
+	// use latents
+	constexpr bool bWithLatent = false;
 }
 
 namespace EAA::Internals
@@ -36,6 +38,9 @@ namespace EAA::Internals
 
 	// Expose async context pin on node
 	static const FName MD_ExposedAsyncContext = TEXT("ExposedAsyncContext");
+
+	// Marker to use enhanced node. TBD: This or async context
+	static const FName MD_HasLatentContext = TEXT("LatentContext");
 
 	static const FName PIN_Handle = TEXT("Handle");
 	static const FName PIN_Index = TEXT("Index");

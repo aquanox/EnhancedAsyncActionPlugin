@@ -73,7 +73,7 @@ void UK2Node_EnhancedAsyncTaskBase::GetNodeContextMenuActions(UToolMenu* Menu, U
 			)
 		);
 	}
-	if (!Context->Pin && HasAnyCapturePins())
+	if (!Context->Pin && GetNumCaptures() > 0)
 	{
 		FToolMenuSection& Section = Menu->FindOrAddSection(NodeSection, NodeSectionDesc);
 		Section.AddMenuEntry(
@@ -124,25 +124,11 @@ bool UK2Node_EnhancedAsyncTaskBase::HasExternalDependencies(TArray<UStruct*>* Op
 	return Super::HasExternalDependencies(OptionalOutput);
 }
 
-FText UK2Node_EnhancedAsyncTaskBase::GetNodeTitle(ENodeTitleType::Type TitleType) const
-{
-	if (EAA::Switches::bDebugTooltips)
-	{
-		FText Base = Super::GetNodeTitle(TitleType);
-		return FText::Format(INVTEXT("{0} (Capture)"), Base);
-	}
-	return Super::GetNodeTitle(TitleType);
-}
-
 FText UK2Node_EnhancedAsyncTaskBase::GetTooltipText() const
 {
 	FFormatNamedArguments Args;
 	Args.Add(TEXT("FunctionTooltip"), Super::GetTooltipText());
-
-	if (!AnyCapturePinHasLinks())
-		Args.Add(TEXT("CaptureString"), LOCTEXT("CaptureString", "Capture. This node supports capture context."));
-	else
-		Args.Add(TEXT("CaptureString"), LOCTEXT("CaptureString", "Capture. This node uses capture context."));
+	Args.Add(TEXT("CaptureString"), LOCTEXT("CaptureString", "Capture. This node supports capture context."));
 
 	if (EAA::Switches::bDebugTooltips)
 	{
@@ -232,6 +218,21 @@ void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultPins()
 	}
 }
 
+const TArray<FEnhancedAsyncTaskCapture>& UK2Node_EnhancedAsyncTaskBase::GetCapturesArray() const
+{
+	return Captures;
+}
+
+TArray<FEnhancedAsyncTaskCapture>& UK2Node_EnhancedAsyncTaskBase::GetMutableCapturesArray()
+{
+	return Captures;
+}
+
+int32 UK2Node_EnhancedAsyncTaskBase::GetNumCaptures() const
+{
+	return Captures.Num();
+}
+
 bool UK2Node_EnhancedAsyncTaskBase::AnyCapturePinHasLinks() const
 {
 	bool bHasLinks = false;
@@ -262,11 +263,6 @@ void UK2Node_EnhancedAsyncTaskBase::GetStandardPins(EEdGraphPinDirection Dir, TA
 			OutPins.Add(Pin);
 		}
 	}
-}
-
-FName UK2Node_EnhancedAsyncTaskBase::GetCapturePinName(int32 PinIndex, EEdGraphPinDirection Dir) const
-{
-	return EAA::Internals::IndexToPinName(PinIndex, Dir == EGPD_Input);
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::IsContextPin(const UEdGraphPin* Pin) const
@@ -405,11 +401,6 @@ bool UK2Node_EnhancedAsyncTaskBase::IsCapturePin(const UEdGraphPin* Pin) const
 	if (Pin->ParentPin != nullptr || Pin->bOrphanedPin || Pin->SourceIndex == INDEX_NONE)
 		return false;
 	return IndexOfCapturePin(Pin) != INDEX_NONE;
-}
-
-int32 UK2Node_EnhancedAsyncTaskBase::GetMaxCapturePins() const
-{
-	return EAA::Internals::MaxCapturePins;
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::CanAddPin() const
@@ -1433,7 +1424,7 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	check(CaptureContextHandlePin);
 
 	// Configure context
-	const bool bContextSetupRequired = bContextRequired && HasAnyCapturePins()
+	const bool bContextSetupRequired = bContextRequired && GetNumCaptures() > 0
 		&& EAA::Switches::bWithSetupContext
 		&& !EAA::Switches::bVariadicGetSet;
 

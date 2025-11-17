@@ -56,6 +56,7 @@ public:
 	UE_API virtual FName GetSectionName() const override { return TEXT("EnhancedAsyncAction"); }
 
 	UE_API const FExternalAsyncActionSpec* FindActionSpecForClass(UClass* Class) const;
+	UE_API const FExternalLatentFunctionSpec* FindLatentSpecForFunction(const UFunction* Function) const;
 
 private:
 	/**

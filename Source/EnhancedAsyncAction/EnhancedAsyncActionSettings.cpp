@@ -22,3 +22,16 @@ const FExternalAsyncActionSpec* UEnhancedAsyncActionSettings::FindActionSpecForC
 	}
 	return nullptr;
 }
+
+const FExternalLatentFunctionSpec* UEnhancedAsyncActionSettings::FindLatentSpecForFunction(const UFunction* Function) const
+{
+	const UClass* FunctionOwner = Function->GetOuterUClass();
+	for (const FExternalLatentFunctionSpec& Spec : ExternalLatentFunctions)
+	{
+		if (Spec.FactoryClass.Get() == FunctionOwner && (Spec.FunctionName.IsNone() || Spec.FunctionName == Function->GetName()))
+		{
+			return &Spec;
+		}
+	}
+	return nullptr;
+}
