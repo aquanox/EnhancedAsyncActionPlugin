@@ -23,19 +23,6 @@ namespace EAA::Internals
 	bool IsValidProxyClass(UClass* InClass);
 
 	/**
-	 * Serch for first metadata encounter first on proxy type (return value of proxy factory function)
-	 * in second round do search on proxy factory type.
-	 *
-	 * Case: in case factory functions returns base pointer type metadata won't be found
-	 *
-	 * @param FactoryClass
-	 * @param ProxyClass
-	 * @param Name
-	 * @return
-	 */
-	//const FString* FindMetadataHierarchical(const UClass* FactoryClass, const UClass* ProxyClass, const FName& Name);
-
-	/**
 	 * Search for first metadata encounter in hierarchy
 	 *
 	 * @param InClass Class to search
@@ -44,7 +31,7 @@ namespace EAA::Internals
 	 */
 	const FString* FindMetadataHierarchical(const UClass* InClass, const FName& Name);
 
-
+	const FEdGraphPinType& GetWildcardType();
 	/**
 	 * Does pin have wildcard type set
 	 */
@@ -66,16 +53,6 @@ namespace EAA::Internals
 	FPropertyTypeInfo IdentifyPropertyTypeForPin(const FEdGraphPinType& Type);
 
 	/**
-	 * Detect pin type for in/out pair.
-	 *
-	 * @param InputPin
-	 * @param OutputPin
-
-	 * @return shared type or wildcard
-	 */
-	FEdGraphPinType DeterminePinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin);
-
-	/**
 	 * Select matching library accessor
 	 * @param Pin
 	 * @param AccessType
@@ -84,8 +61,4 @@ namespace EAA::Internals
 	 */
 	bool SelectAccessorForType(UEdGraphPin* Pin, EAccessorRole AccessType, FName& OutFunction);
 	bool SelectAccessorForType(const FEdGraphPinType& PinType, EAccessorRole AccessType, FName& OutFunction);
-
-	void BuildDefaultCapturePins(UK2Node_EnhancedAsyncTaskBase* Node);
-
-	FString BuildContextConfigString(const UK2Node_EnhancedAsyncTaskBase* Node, int32 NumCaptures);
 }

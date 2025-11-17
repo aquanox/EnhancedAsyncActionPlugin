@@ -20,6 +20,7 @@ public:
 	UK2Node_EnhancedAsyncAction();
 
 	virtual void GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const override;
+	virtual void GetNodeContextMenuActions(class UToolMenu* Menu, class UGraphNodeContextMenuContext* Context) const override;
 };
 
 #undef UE_API

@@ -14,8 +14,12 @@ struct FPropertyTypeInfo;
 
 namespace EAA::Switches
 {
-	// EXPERIMENT: allow a regular struct to hold context
-	constexpr bool bWithStaticContext = false;
+	// gather known types and call setup to optimize property bag reconstruction
+	constexpr bool bWithSetupContext = true;
+	// enables debug tooltips
+	constexpr bool bDebugTooltips = false;
+	// uses variadic set/get function instead of multiple single get/set
+	constexpr bool bVariadicGetSet = true;
 }
 
 namespace EAA::Internals
@@ -65,8 +69,8 @@ namespace EAA::Internals
 
 	UE_API int32 NameToIndex(const FName& Name);
 
-	UE_API FName IndexToPinName(int32 Index, bool bInput);
-	UE_API int32 PinNameToIndex(const FName& Name, bool bInput);
+	UE_API FName IndexToPinName(int32 Index, bool bIsInput);
+	UE_API int32 PinNameToIndex(const FName& Name, bool bIsInput);
 
 	UE_API int32 FindPinIndex(const FName& Name);
 	UE_API FName MirrorPinName(const FName& Name);

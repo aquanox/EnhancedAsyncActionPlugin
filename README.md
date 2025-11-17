@@ -175,14 +175,12 @@ Context created only if there is at least one capture pin connected.
 
 ## TODOS
 
+- Latent functions support
 - Write some tests
 - Optimize graph updates on actions
-- Latent functions support
-- Maps support (has to wait for UE 5.8)
 - Improve error handling
-- Experiment with direct container access (make a FInstancedPropertyBag member required, since condition already requires editing and StructUtils part of UE Core)
-- Experiment with optimizing generated graph nodes (variadic does it great)
-- Better handling of malformed or changed nodes (there are lots of debug asserts right now)
+- Better handling of malformed or changed nodes (there are lots of asserts right now)
+- Maps support (has to wait for UE 5.8)
 
 ## Unreal Engine Versions
 

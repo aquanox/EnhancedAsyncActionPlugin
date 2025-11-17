@@ -54,3 +54,8 @@ void UK2Node_EnhancedAsyncAction::GetMenuActions(FBlueprintActionDatabaseRegistr
 		return NodeSpawner;
 	}) );
 }
+
+void UK2Node_EnhancedAsyncAction::GetNodeContextMenuActions(class UToolMenu* Menu, class UGraphNodeContextMenuContext* Context) const
+{
+	Super::GetNodeContextMenuActions(Menu, Context);
+}

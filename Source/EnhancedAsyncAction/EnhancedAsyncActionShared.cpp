@@ -56,18 +56,18 @@ int32 EAA::Internals::NameToIndex(const FName& Name)
 	return Idx;
 }
 
-FName EAA::Internals::IndexToPinName(int32 Index, bool bInput)
+FName EAA::Internals::IndexToPinName(int32 Index, bool bIsInput)
 {
 	FLocalNameTable& Table = FLocalNameTable::Get();
-	const auto& Container = bInput ? Table.InputPinNames : Table.OutputPinNames;
+	const auto& Container = bIsInput ? Table.InputPinNames : Table.OutputPinNames;
 	check(Container.IsValidIndex(Index));
 	return Container[Index];
 }
 
-int32 EAA::Internals::PinNameToIndex(const FName& Name, bool bInput)
+int32 EAA::Internals::PinNameToIndex(const FName& Name, bool bIsInput)
 {
 	FLocalNameTable& Table = FLocalNameTable::Get();
-	const int32 Idx = (bInput ? Table.InputPinNames : Table.OutputPinNames).IndexOfByKey(Name);
+	const int32 Idx = (bIsInput ? Table.InputPinNames : Table.OutputPinNames).IndexOfByKey(Name);
 	check(Idx != INDEX_NONE);
 	return Idx;
 }

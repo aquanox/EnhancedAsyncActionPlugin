@@ -54,16 +54,6 @@ bool EAA::Internals::IsValidProxyClass(UClass* InClass)
 		&& InClass->HasMetaData(MD_HasAsyncContext);
 }
 
-//
-// const FString* EAA::Internals::FindMetadataHierarchical(const UClass* FactoryClass, const UClass* ProxyClass, const FName& Name)
-// {
-// 	if (auto InProxy = FindMetadataHierarchical(ProxyClass, Name))
-// 		return InProxy;
-// 	if (auto InFactory = FindMetadataHierarchical(FactoryClass, Name))
-// 		return InFactory;
-// 	return nullptr;
-// }
-
 const FString* EAA::Internals::FindMetadataHierarchical(const UClass* InClass, const FName& Name)
 {
 	for (const UStruct* TestStruct = InClass; TestStruct; TestStruct = TestStruct->GetSuperStruct())
@@ -74,6 +64,12 @@ const FString* EAA::Internals::FindMetadataHierarchical(const UClass* InClass, c
 		}
 	}
 	return nullptr;
+}
+
+const FEdGraphPinType& EAA::Internals::GetWildcardType()
+{
+	static const FEdGraphPinType WildcardPinType = FEdGraphPinType(UEdGraphSchema_K2::PC_Wildcard, NAME_None, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
+	return WildcardPinType;
 }
 
 bool EAA::Internals::IsWildcardType(const UEdGraphPin* Pin)
@@ -265,39 +261,6 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 	return TypeInfo;
 }
 
-FEdGraphPinType EAA::Internals::DeterminePinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
-{
-	static const FEdGraphPinType WildcardPinType = FEdGraphPinType(UEdGraphSchema_K2::PC_Wildcard, NAME_None, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
-
-	auto ExpectedPinType = [](UEdGraphPin* LocalPin) -> FEdGraphPinType
-	{
-		if (LocalPin->LinkedTo.Num() == 0)
-		{
-			return WildcardPinType;
-		}
-		else
-		{
-			UEdGraphPin* ArgumentSourcePin = LocalPin->LinkedTo[0];
-			return ArgumentSourcePin->PinType;
-		}
-	};
-
-	auto InputType = ExpectedPinType(InputPin);
-	auto OutputType = ExpectedPinType(OutputPin);
-
-	FEdGraphPinType NewType = InputType;
-	if (InputType != OutputType)
-	{
-		if (IsWildcardType(InputType) && !IsWildcardType(OutputType))
-			NewType = OutputType;
-		else if (!IsWildcardType(InputType) && IsWildcardType(OutputType))
-			NewType = InputType;
-		else
-			NewType = InputType;
-	}
-	return NewType;
-}
-
 bool EAA::Internals::SelectAccessorForType(UEdGraphPin* Pin, EAccessorRole AccessType, FName& OutFunction)
 {
 	FPropertyTypeInfo TypeInfo = IdentifyPropertyTypeForPin(Pin);
@@ -308,27 +271,4 @@ bool EAA::Internals::SelectAccessorForType(const FEdGraphPinType& PinType, EAcce
 {
 	FPropertyTypeInfo TypeInfo = IdentifyPropertyTypeForPin(PinType);
 	return SelectAccessorForType(TypeInfo, AccessType, OutFunction);
-}
-
-void EAA::Internals::BuildDefaultCapturePins(UK2Node_EnhancedAsyncTaskBase* Node)
-{
-
-}
-
-FString EAA::Internals::BuildContextConfigString(const UK2Node_EnhancedAsyncTaskBase* Node, int32 NumCaptures)
-{
-	FStringBuilderBase BuilderBase;
-	for (int32 Index = 0; Index < NumCaptures; ++Index)
-	{
-		auto* InPin = Node->FindCapturePin(EGPD_Input, Index);
-		auto* OutPin = Node->FindCapturePin(EGPD_Output, Index);
-
-		auto DetectedPinType = EAA::Internals::DeterminePinType(InPin, OutPin);
-
-		if (BuilderBase.Len())  BuilderBase.Append(TEXT(";"));
-
-		FPropertyTypeInfo TypeInfo = IdentifyPropertyTypeForPin(DetectedPinType);
-		BuilderBase.Append(FPropertyTypeInfo::EncodeTypeInfo(TypeInfo));
-	}
-	return BuilderBase.ToString();
 }
