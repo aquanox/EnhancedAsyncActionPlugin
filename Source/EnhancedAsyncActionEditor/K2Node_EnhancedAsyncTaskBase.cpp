@@ -18,6 +18,7 @@
 #include "K2Node_AssignmentStatement.h"
 #include "K2Node_CustomEvent.h"
 #include "EnhancedAsyncActionPrivate.h"
+#include "EnhancedAsyncActionSettings.h"
 #include "K2Node_CallArrayFunction.h"
 #include "K2Node_MakeArray.h"
 #include "StructUtils/PropertyBag.h"
@@ -120,13 +121,7 @@ void UK2Node_EnhancedAsyncTaskBase::GetNodeContextMenuActions(UToolMenu* Menu, U
 
 bool UK2Node_EnhancedAsyncTaskBase::HasExternalDependencies(TArray<UStruct*>* OptionalOutput) const
 {
-	const bool bContainerResult = AsyncContextContainerType != nullptr;
-	if (bContainerResult && OptionalOutput)
-	{
-		OptionalOutput->AddUnique(AsyncContextContainerType);
-	}
-	const bool bSuperResult = Super::HasExternalDependencies(OptionalOutput);
-	return bContainerResult || bSuperResult;
+	return Super::HasExternalDependencies(OptionalOutput);
 }
 
 FText UK2Node_EnhancedAsyncTaskBase::GetNodeTitle(ENodeTitleType::Type TitleType) const
@@ -162,28 +157,49 @@ FText UK2Node_EnhancedAsyncTaskBase::GetTooltipText() const
 	return FText::Format(LOCTEXT("AsyncTaskTooltip", "{FunctionTooltip}\n\n{CaptureString}{Extra}"), Args);
 }
 
-void UK2Node_EnhancedAsyncTaskBase::ImportCaptureConfigFromProxyClass()
+void UK2Node_EnhancedAsyncTaskBase::ImportConfigFromClass(UClass* InClass)
 {
-	const FString* ContextParamName = EAA::Internals::FindMetadataHierarchical(ProxyClass, EAA::Internals::MD_HasAsyncContext);
+	const FString* ContextParamName = EAA::Internals::FindMetadataHierarchical(InClass, EAA::Internals::MD_HasAsyncContext);
 	check(ContextParamName);
 	AsyncContextParameterName = **ContextParamName;
 
-	AsyncContextContainerType = FInstancedPropertyBag::StaticStruct();
-	AsyncContextContainerProperty = NAME_None;
-
-	const FString* ContextPropName = EAA::Internals::FindMetadataHierarchical(ProxyClass, EAA::Internals::MD_AsyncContextContainer);
-	FName PossibleContextProp = ContextPropName ? **ContextPropName : AsyncContextParameterName;
+	if (const FString* ContextPropName = EAA::Internals::FindMetadataHierarchical(InClass, EAA::Internals::MD_AsyncContextContainer))
 	{
 		// search for member property with explicitly specified with AsyncContextContainer or having same name as AsyncContext
-		auto* MemberProperty = CastField<FStructProperty>(ProxyClass->FindPropertyByName(PossibleContextProp));
-		if (MemberProperty  && MemberProperty->Struct->IsChildOf(FInstancedPropertyBag::StaticStruct()))
+		if (EAA::Internals::IsValidContainerProperty(InClass, **ContextPropName))
 		{
-			AsyncContextContainerType = MemberProperty->Struct;
-			AsyncContextContainerProperty = MemberProperty->GetFName();
+			AsyncContextContainerProperty = **ContextPropName;
 		}
 	}
+	else if (EAA::Internals::IsValidContainerProperty(InClass, AsyncContextParameterName))
+	{
+		AsyncContextContainerProperty = AsyncContextParameterName;
+	}
+	else
+	{
+		AsyncContextContainerProperty = NAME_None;
+	}
 
-	bExposeContextParameter = EAA::Internals::FindMetadataHierarchical(ProxyClass, EAA::Internals::MD_ExposedAsyncContext) != nullptr;
+	bExposeContextParameter = EAA::Internals::FindMetadataHierarchical(InClass, EAA::Internals::MD_ExposedAsyncContext) != nullptr;
+}
+
+void UK2Node_EnhancedAsyncTaskBase::ImportConfigFromSpec(UClass* InClass, const FExternalAsyncActionSpec& InSpec)
+{
+	AsyncContextParameterName = InSpec.ContextPropertyName;
+	bExposeContextParameter = InSpec.bExposedContext;
+
+	if (!InSpec.ContainerPropertyName.IsNone() && EAA::Internals::IsValidContainerProperty(InClass, InSpec.ContainerPropertyName))
+	{
+		AsyncContextContainerProperty = InSpec.ContainerPropertyName;
+	}
+	else if (EAA::Internals::IsValidContainerProperty(InClass, AsyncContextParameterName))
+	{
+		AsyncContextContainerProperty = AsyncContextParameterName;
+	}
+	else
+	{
+		AsyncContextContainerProperty = NAME_None;
+	}
 }
 
 void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultPins()
@@ -1310,18 +1326,6 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 {
 	const UEdGraphSchema_K2* Schema = CompilerContext.GetSchema();
 	check(SourceGraph && Schema);
-
-	if (!EAA::Internals::IsValidProxyClass(ProxyClass))
-	{
-		const FText ClassName = ProxyFactoryClass ? FText::FromString(ProxyFactoryClass->GetName()) : LOCTEXT("BadClassString", "Bad Class");
-		const FString FormattedMessage = FText::Format(
-			LOCTEXT("AsyncTaskBadProxy", "EnhancedAsyncAction: {0} is invalid async task @@"),
-			ClassName
-		).ToString();
-
-		CompilerContext.MessageLog.Error(*FormattedMessage, this);
-		return;
-	}
 
 	// Is Context feature used on this node
 	const bool bContextRequired = AnyCapturePinHasLinks();

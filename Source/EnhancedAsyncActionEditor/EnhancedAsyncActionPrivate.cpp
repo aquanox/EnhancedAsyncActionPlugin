@@ -47,13 +47,6 @@ FString EAA::Internals::ToDebugString(const UK2Node_EnhancedAsyncTaskBase* Node)
 	return Buffer.ToString();
 }
 
-bool EAA::Internals::IsValidProxyClass(UClass* InClass)
-{
-	return InClass
-		&& InClass->IsChildOf(UBlueprintAsyncActionBase::StaticClass())
-		&& InClass->HasMetaData(MD_HasAsyncContext);
-}
-
 const FString* EAA::Internals::FindMetadataHierarchical(const UClass* InClass, const FName& Name)
 {
 	for (const UStruct* TestStruct = InClass; TestStruct; TestStruct = TestStruct->GetSuperStruct())

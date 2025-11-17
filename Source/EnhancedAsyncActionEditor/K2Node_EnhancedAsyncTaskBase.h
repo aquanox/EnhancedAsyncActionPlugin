@@ -59,7 +59,8 @@ public:
 	virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
 	virtual FText GetTooltipText() const override;
 
-	virtual void ImportCaptureConfigFromProxyClass();
+	void ImportConfigFromClass(UClass* InClass);
+	void ImportConfigFromSpec(UClass* InClass, const struct FExternalAsyncActionSpec& InSpec);
 
 	virtual void AllocateDefaultPins() override;
 
@@ -174,9 +175,6 @@ protected:
 	// marks context pin visible in graph
 	UPROPERTY()
 	bool bExposeContextParameter = false;
-	// type of context container
-	UPROPERTY()
-	TObjectPtr<UScriptStruct> AsyncContextContainerType;
 	// name of context container property, none for external
 	UPROPERTY()
 	FName AsyncContextContainerProperty;

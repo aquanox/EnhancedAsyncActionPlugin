@@ -41,6 +41,7 @@ public class EnhancedAsyncActionEditor : ModuleRules
 				"KismetCompiler",
 				"BlueprintGraph",
 				"EditorFramework",
+				"PropertyEditor",
 				"ToolMenus",
 				"Engine",
 				"Slate",

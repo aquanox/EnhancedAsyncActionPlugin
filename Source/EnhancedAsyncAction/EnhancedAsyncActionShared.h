@@ -43,7 +43,7 @@ namespace EAA::Internals
 	static const FName PIN_Action = TEXT("Action");
 	static const FName PIN_Object = TEXT("Object");
 
-	bool IsValidContainerProperty(const UObject* Object, const FName& Property);
+	UE_API bool IsValidContainerProperty(const UObject* Object, const FName& Property);
 
 	template <typename T>
 	T* GetMemberChecked(const UObject* Object, const FName& Property, const UScriptStruct* ExpectedType = nullptr)

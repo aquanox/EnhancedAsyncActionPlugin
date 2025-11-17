@@ -103,7 +103,9 @@ bool EAA::Internals::IsValidContainerProperty(const UObject* Object, const FName
 	if (Property.IsNone() || !IsValid(Object))
 		return false;
 
-	FStructProperty* StructProperty = CastField<FStructProperty>(Object->GetClass()->FindPropertyByName(Property));
+	const UClass* Class = Object->IsA(UClass::StaticClass()) ? CastChecked<const UClass>(Object) : Object->GetClass();
+
+	FStructProperty* StructProperty = CastField<FStructProperty>(Class->FindPropertyByName(Property));
 	if (!StructProperty)
 		return false;
 

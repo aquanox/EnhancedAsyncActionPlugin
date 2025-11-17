@@ -18,14 +18,13 @@ UEAADemoAsyncActionCapture* UEAADemoAsyncActionCapture::StartActionWithCapture(c
 	Proxy->PayloadMode = bDirectCall ? EEAAPayloadMode::DIRECT : EEAAPayloadMode::TIMER;
 	Proxy->LocalUserIndex = UserIndex;
 	Proxy->World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
-	Proxy->RegisterWithGameInstance(WorldContextObject);
 	return Proxy;
 }
 
 void UEAADemoAsyncActionCapture::Activate()
 {
 	auto Self = MakeWeakObjectPtr(this);
-	
+
 	UE_LOGFMT(LogEnhancedAction, Verbose, "Activate {Func}", Self->GetName());
 	if (PayloadMode == EEAAPayloadMode::ASYNC)
 	{
@@ -44,10 +43,10 @@ void UEAADemoAsyncActionCapture::Activate()
 
 void UEAADemoAsyncActionCapture::InvokePayload()
 {
-	SetReadyToDestroy();
-	
 	UE_LOGFMT(LogEnhancedAction, Verbose, "Payload {Func}", GetName());
 	OnCompleted.Broadcast(this, LocalUserIndex, TEXT("username"), TArray<int32>());
+
+	SetReadyToDestroy();
 }
 
 UEAADemoAsyncActionCaptureMember::UEAADemoAsyncActionCaptureMember()
@@ -62,6 +61,26 @@ UEAADemoAsyncActionCaptureMember* UEAADemoAsyncActionCaptureMember::StartActionW
 	Proxy->PayloadMode = bDirectCall ? EEAAPayloadMode::DIRECT : EEAAPayloadMode::TIMER;
 	Proxy->LocalUserIndex = UserIndex;
 	Proxy->World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
-	Proxy->RegisterWithGameInstance(WorldContextObject);
 	return Proxy;
+}
+
+UEAADemoAsyncActionExternal::UEAADemoAsyncActionExternal()
+{
+}
+
+UEAADemoAsyncActionExternal* UEAADemoAsyncActionExternal::StartActionExternal(const UObject* WorldContextObject)
+{
+	auto Proxy = NewObject<ThisClass>();
+	UE_LOGFMT(LogEnhancedAction, Verbose, "Construct Proxy {Func}", Proxy->GetName());
+	return Proxy;
+}
+
+void UEAADemoAsyncActionExternal::Activate()
+{
+	auto Self = MakeWeakObjectPtr(this);
+	AsyncTask(ENamedThreads::GameThread, [Self]()
+	{
+		ensure(Self.IsValid());
+		Self->OnCompleted.Broadcast(Self.Get(), 42, TEXT("username"), TArray<int32>());
+	});
 }

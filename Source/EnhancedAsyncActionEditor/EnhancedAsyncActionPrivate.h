@@ -18,11 +18,6 @@ namespace EAA::Internals
 	FString ToDebugString(const UK2Node_EnhancedAsyncTaskBase* Node);
 
 	/**
-	 * Test if class suitable for the enhancement
-	 */
-	bool IsValidProxyClass(UClass* InClass);
-
-	/**
 	 * Search for first metadata encounter in hierarchy
 	 *
 	 * @param InClass Class to search

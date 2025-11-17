@@ -42,7 +42,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FEAADemoResult,
  *
  * Then delegate still passes the capture to the subscriber
  */
-UCLASS(meta=(HasDedicatedAsyncNode, HasAsyncContext=Context))
+UCLASS(MinimalAPI, meta=(HasDedicatedAsyncNode, HasAsyncContext=Context))
 class UEAADemoAsyncActionCapture : public UBlueprintAsyncActionBase
 {
 	GENERATED_BODY()
@@ -51,7 +51,7 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FEAADemoResult OnCompleted;
 
-	UFUNCTION(BlueprintCallable, Category="EAA|Demo", DisplayName="Load Stats (External Ctx)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
+	UFUNCTION(BlueprintCallable, Category="EAA|Demo", DisplayName="Load Stats (Basic)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
 	static UEAADemoAsyncActionCapture* StartActionWithCapture(const UObject* WorldContextObject, bool bDirectCall, const int32 UserIndex);
 
 	virtual void Activate() override;
@@ -82,7 +82,7 @@ protected:
  *
  * Then delegate still passes the capture to the subscriber
  */
-UCLASS(meta=(HasDedicatedAsyncNode, HasAsyncContext=Context, AsyncContextContainer="ContextData"))
+UCLASS(MinimalAPI, meta=(HasDedicatedAsyncNode, HasAsyncContext=Context, AsyncContextContainer="ContextData"))
 class UEAADemoAsyncActionCaptureMember : public UEAADemoAsyncActionCapture
 {
 	GENERATED_BODY()
@@ -90,11 +90,34 @@ class UEAADemoAsyncActionCaptureMember : public UEAADemoAsyncActionCapture
 public:
 	UEAADemoAsyncActionCaptureMember();
 
-	UFUNCTION(BlueprintCallable, Category="EAA|Demo",DisplayName="Load Stats (Embedded Ctx)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
+	UFUNCTION(BlueprintCallable, Category="EAA|Demo",DisplayName="Load Stats (Embedded)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
 	static UEAADemoAsyncActionCaptureMember* StartActionWithCaptureFixed(const UObject* WorldContextObject, bool bDirectCall, const int32 UserIndex);
 
 private:
 	// any number of properties backed by bag
+	UPROPERTY()
+	FInstancedPropertyBag ContextData;
+};
+
+/**
+ * Async action without any plugin metadata but compatible to certain degree (has a parameter for context and optionally container)
+ */
+UCLASS(MinimalAPI)
+class UEAADemoAsyncActionExternal : public UBlueprintAsyncActionBase
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(BlueprintAssignable)
+	FEAADemoResult OnCompleted;
+
+	UEAADemoAsyncActionExternal();
+
+	UFUNCTION(BlueprintCallable, Category="EAA|Demo",DisplayName="Load Stats (External)", meta=( BlueprintInternalUseOnly=true, WorldContext = "WorldContextObject"))
+	static UEAADemoAsyncActionExternal* StartActionExternal(const UObject* WorldContextObject);
+
+	virtual void Activate() override;
+private:
 	UPROPERTY()
 	FInstancedPropertyBag ContextData;
 };
