@@ -2,9 +2,8 @@
 
 #pragma once
 
-#include "EdGraph/EdGraphPin.h"
 #include "EdGraphSchema_K2.h"
-#include "EnhancedAsyncActionShared.h"
+#include "EnhancedAsyncContextTypes.h"
 
 class UK2Node_EnhancedAsyncTaskBase;
 class UK2Node_CallFunction;
@@ -15,7 +14,7 @@ namespace EAA::Internals
 	FString ToDebugString(const FProperty* Pin);
 	FString ToDebugString(const UEdGraphPin* Pin);
 	FString ToDebugString(const FEdGraphPinType& Type);
-	FString ToDebugString(const UK2Node_EnhancedAsyncTaskBase* Node);
+	FString ToDebugString(const UK2Node* Node);
 
 	/**
 	 * Search for first metadata encounter in hierarchy

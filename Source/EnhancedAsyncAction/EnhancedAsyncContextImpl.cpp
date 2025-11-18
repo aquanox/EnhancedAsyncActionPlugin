@@ -1,7 +1,7 @@
 ﻿// Copyright 2025, Aquanox.
 
-#include "EnhancedAsyncActionContextImpl.h"
-#include "EnhancedAsyncActionShared.h"
+#include "EnhancedAsyncContextImpl.h"
+#include "EnhancedAsyncContextShared.h"
 #include "EdGraph/EdGraphPin.h"
 #include "EdGraph/EdGraphSchema.h"
 #include "Misc/DefinePrivateMemberPtr.h"
@@ -112,6 +112,11 @@ void FEnhancedAsyncActionContext_PropertyBagBase::AddReferencedObjects(FReferenc
 void FEnhancedAsyncActionContext_PropertyBagBase::DebugDump(FStringBuilderBase& Builder) const
 {
 	FConstStructView StructView = GetValueRef()->GetValue();
+	if (!StructView.IsValid())
+	{
+		Builder.Append(TEXT("DATA NULL"));
+		return;
+	}
 
 	{
 		FStringBuilderBase HexData;
@@ -722,6 +727,13 @@ FEnhancedAsyncActionContext_PropertyBagRef::FEnhancedAsyncActionContext_Property
 	OwnerRef = OwningObject;
 	ValueRef = EAA::Internals::GetMemberChecked<FInstancedPropertyBag>(OwningObject, PropertyName, FInstancedPropertyBag::StaticStruct());
 	bAddReferencedObjectsAllowed = false; // do not need as it is already a reflected UPROPERTY
+}
+
+FEnhancedAsyncActionContext_PropertyBagRef::FEnhancedAsyncActionContext_PropertyBagRef(const UObject* OwningObject, FInstancedPropertyBag* ContainerObject, bool bExpose)
+{
+	OwnerRef = OwningObject;
+	ValueRef = ContainerObject;
+	bAddReferencedObjectsAllowed = bExpose;
 }
 
 bool FEnhancedAsyncActionContext_PropertyBagRef::IsValid() const

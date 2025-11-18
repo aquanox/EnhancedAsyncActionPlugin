@@ -1,116 +1,173 @@
 ﻿// Copyright 2025, Aquanox.
 
-#include "EnhancedAsyncActionShared.h"
-
+#include "EnhancedAsyncContextTypes.h"
 #include "StructUtils/PropertyBag.h"
-#include "UObject/Class.h"
-#include "UObject/UnrealType.h"
 #include "UObject/TextProperty.h"
-#include "EnhancedAsyncActionContextLibrary.h"
+#include "EnhancedAsyncContextLibrary.h"
 
-DEFINE_LOG_CATEGORY(LogEnhancedAction);
+const FPropertyTypeInfo FPropertyTypeInfo::Invalid(FPropertyTypeInfo::EInternalPreset::PRESET_Invalid);
+const FPropertyTypeInfo FPropertyTypeInfo::Wildcard(FPropertyTypeInfo::EInternalPreset::PRESET_Wildcard);
 
-struct FLocalNameTable
+static const FString EnumPrefix = TEXT("EPropertyBagPropertyType::");
+
+bool FPropertyTypeInfo::IsWildcard() const
 {
-	enum { MaxIndex = std::max(EAA::Internals::MaxCapturePins, 64) };
+	return *this == Wildcard;
+}
 
-	TArray<FName, TInlineAllocator<MaxIndex>> CapturePropertyNames;
-	TArray<FName, TInlineAllocator<MaxIndex>> InputPinNames;
-	TArray<FName, TInlineAllocator<MaxIndex>> OutputPinNames;
-	TArray<TPair<FName, FName>, TInlineAllocator<MaxIndex>> MirrorTable;
+bool FPropertyTypeInfo::IsValid() const
+{
+	return ContainerType != EPropertyBagContainerType::Count
+		&& ValueType != EPropertyBagPropertyType::Count
+		&& KeyType != EPropertyBagPropertyType::Count;
+}
 
-	static FLocalNameTable& Get()
+bool FPropertyTypeInfo::IsSupported() const
+{
+	return IsValid() && EAA::Internals::HasAccessorForType(*this);
+}
+
+FString FPropertyTypeInfo::EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo)
+{
+	FStringBuilderBase Builder;
+
+	switch (TypeInfo.ContainerType)
 	{
-		static FLocalNameTable Instance;
-		return Instance;
+	default:
+		checkNoEntry();
+		break;
+	case EPropertyBagContainerType::None:
+		Builder.Append(TEXT("N:"));
+		break;
+	case EPropertyBagContainerType::Array:
+		Builder.Append(TEXT("A:"));
+		break;
+	case EPropertyBagContainerType::Set:
+		Builder.Append(TEXT("S:"));
+		break;
+	// TODO: maps supported in 5.8
+	// case EPropertyBagContainerType::Map:
+		// Builder.Append(TEXT("M:"));
+		// break;
 	}
-private:
-	FLocalNameTable()
-	{
-		CapturePropertyNames.SetNum(MaxIndex);
-		InputPinNames.SetNum(MaxIndex);
-		OutputPinNames.SetNum(MaxIndex);
-		MirrorTable.SetNum(MaxIndex);
-		for (int32 I = 0; I < MaxIndex; I++)
-		{
-			CapturePropertyNames[I] = *FString::Printf(TEXT("ctx%02d"), I);
-			InputPinNames[I] = *FString::Printf(TEXT("In[%d]"), I);
-			OutputPinNames[I] = *FString::Printf(TEXT("Out[%d]"), I);
 
-			MirrorTable[I] = TPair<FName, FName>(InputPinNames[I], OutputPinNames[I]);
+	FString Str = StaticEnum<EPropertyBagPropertyType>()->GetNameByValue((int64)TypeInfo.ValueType).ToString();
+	check(Str.StartsWith(EnumPrefix, ESearchCase::CaseSensitive));
+	Builder.Append(Str.RightChop(EnumPrefix.Len()));
+
+	if (::IsValid(TypeInfo.ValueTypeObject))
+	{
+		Builder.Append(TEXT("="));
+		Builder.Append(FSoftObjectPath(TypeInfo.ValueTypeObject).ToString());
+	}
+
+	return Builder.ToString();
+}
+
+bool FPropertyTypeInfo::ParseTypeInfo(FString Data, FPropertyTypeInfo& TypeInfo)
+{
+	if (Data.Len() < 4 || Data[1] != TEXT(':'))
+	{
+		ensureAlwaysMsgf(false, TEXT("Bad type format"));
+		return false;
+	}
+
+	TCHAR ContainerTypeKey = Data[0];
+	Data.MidInline(2);
+
+	if (ContainerTypeKey == TEXT('N') || ContainerTypeKey == TEXT('A') || ContainerTypeKey == TEXT('S'))
+	{
+		switch (ContainerTypeKey)
+		{
+		case 'N': TypeInfo.ContainerType = EPropertyBagContainerType::None; break;
+		case 'A': TypeInfo.ContainerType = EPropertyBagContainerType::Array; break;
+		case 'S': TypeInfo.ContainerType = EPropertyBagContainerType::Set; break;
+		default: checkNoEntry(); break;
+		}
+
+		FString Type, Object;
+		if (Data.Split(TEXT("="), &Type, &Object))
+		{
+			int64 Value = StaticEnum<EPropertyBagPropertyType>()->GetValueByNameString( EnumPrefix + Type );
+			check (Value != INDEX_NONE);
+			TypeInfo.ValueType = static_cast<EPropertyBagPropertyType>(Value);
+			TypeInfo.ValueTypeObject = FSoftObjectPath(Object).ResolveObject();
+		}
+		else
+		{
+			int64 Value = StaticEnum<EPropertyBagPropertyType>()->GetValueByNameString( EnumPrefix + Data );
+			check (Value != INDEX_NONE);
+			TypeInfo.ValueType = static_cast<EPropertyBagPropertyType>(Value);
 		}
 	}
-};
-
-FName EAA::Internals::IndexToName(int32 Index)
-{
-	auto& CapturePropertyNames = FLocalNameTable::Get().CapturePropertyNames;
-	return CapturePropertyNames.IsValidIndex(Index) ? CapturePropertyNames[Index] : NAME_Name;
-}
-
-int32 EAA::Internals::NameToIndex(const FName& Name)
-{
-	auto& CapturePropertyNames = FLocalNameTable::Get().CapturePropertyNames;
-	int32 Idx = CapturePropertyNames.IndexOfByKey(Name);
-	check(Idx != INDEX_NONE);
-	return Idx;
-}
-
-FName EAA::Internals::IndexToPinName(int32 Index, bool bIsInput)
-{
-	FLocalNameTable& Table = FLocalNameTable::Get();
-	const auto& Container = bIsInput ? Table.InputPinNames : Table.OutputPinNames;
-	check(Container.IsValidIndex(Index));
-	return Container[Index];
-}
-
-int32 EAA::Internals::PinNameToIndex(const FName& Name, bool bIsInput)
-{
-	FLocalNameTable& Table = FLocalNameTable::Get();
-	const int32 Idx = (bIsInput ? Table.InputPinNames : Table.OutputPinNames).IndexOfByKey(Name);
-	check(Idx != INDEX_NONE);
-	return Idx;
-}
-
-int32 EAA::Internals::FindPinIndex(const FName& Name)
-{
-	FLocalNameTable& Table = FLocalNameTable::Get();
-	const int32 InputIndex = Table.InputPinNames.IndexOfByKey(Name);
-	if (InputIndex != INDEX_NONE)
-		return InputIndex;
-	const int32 OutputIndex = Table.OutputPinNames.IndexOfByKey(Name);
-	if (OutputIndex != INDEX_NONE)
-		return OutputIndex;
-	checkNoEntry();
-	return INDEX_NONE;
-}
-
-FName EAA::Internals::MirrorPinName(const FName& Name)
-{
-	FLocalNameTable& Table = FLocalNameTable::Get();
-	const int32 InputIndex = Table.InputPinNames.IndexOfByKey(Name);
-	if (InputIndex != INDEX_NONE)
-		return Table.OutputPinNames[InputIndex];
-	const int32 OutputIndex = Table.OutputPinNames.IndexOfByKey(Name);
-	if (OutputIndex != INDEX_NONE)
-		return Table.InputPinNames[OutputIndex];
-	checkNoEntry();
-	return NAME_None;
-}
-
-bool EAA::Internals::IsValidContainerProperty(const UObject* Object, const FName& Property)
-{
-	if (Property.IsNone() || !IsValid(Object))
+	else if (ContainerTypeKey == TEXT('M'))
+	{
+		// todo
 		return false;
+	}
 
-	const UClass* Class = Object->IsA(UClass::StaticClass()) ? CastChecked<const UClass>(Object) : Object->GetClass();
-
-	FStructProperty* StructProperty = CastField<FStructProperty>(Class->FindPropertyByName(Property));
-	if (!StructProperty)
-		return false;
-
-	return StructProperty->Struct && StructProperty->Struct->IsChildOf(FInstancedPropertyBag::StaticStruct());
+	return TypeInfo.IsValid();
 }
+
+FPropertyTypeInfo::FPropertyTypeInfo()
+	: ContainerType(EPropertyBagContainerType::None)
+	, ValueType(EPropertyBagPropertyType::None)
+	, KeyType(EPropertyBagPropertyType::None)
+{
+}
+
+FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagPropertyType Type)
+	: ContainerType(EPropertyBagContainerType::None)
+	, ValueType(Type)
+	, KeyType(EPropertyBagPropertyType::None)
+{
+}
+
+FPropertyTypeInfo::FPropertyTypeInfo(const FProperty* ExistingProperty)
+	: KeyType(EPropertyBagPropertyType::None)
+{
+	ContainerType = EAA::Internals::GetContainerTypeFromProperty(ExistingProperty);
+	if (auto AsMap = CastField<FMapProperty>(ExistingProperty))
+	{
+		ValueType = EAA::Internals::GetValueTypeFromProperty(AsMap->ValueProp);
+		ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(AsMap->ValueProp);
+		KeyType = EAA::Internals::GetValueTypeFromProperty(AsMap->KeyProp);
+		KeyTypeObject =  EAA::Internals::GetValueTypeObjectFromProperty(AsMap->KeyProp);
+	}
+	else
+	{
+		ValueType = EAA::Internals::GetValueTypeFromProperty(ExistingProperty);
+		ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ExistingProperty);
+		KeyType = EPropertyBagPropertyType::None;
+	}
+}
+
+FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object)
+	: ContainerType(EPropertyBagContainerType::None)
+	, ValueType(Type), ValueTypeObject(Object)
+	, KeyType(EPropertyBagPropertyType::None)
+{
+}
+
+FPropertyTypeInfo::FPropertyTypeInfo(EInternalPreset Preset)
+{
+	switch (Preset)
+	{
+	case PRESET_Wildcard:
+		ContainerType = EPropertyBagContainerType::None;
+		KeyType = ValueType = EPropertyBagPropertyType::None;
+		KeyTypeObject = ValueTypeObject = nullptr;
+		break;
+	case PRESET_Invalid:
+		ContainerType = EPropertyBagContainerType::Count;
+		KeyType = ValueType = EPropertyBagPropertyType::Count;
+		KeyTypeObject = ValueTypeObject = nullptr;
+		break;
+	default:
+		break;
+	}
+}
+
 
 bool EAA::Internals::HasAccessorForType(const FPropertyTypeInfo& TypeInfo)
 {
@@ -124,13 +181,13 @@ bool EAA::Internals::SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EA
 
 #define FUNC_SELECT(Set, Get) \
 	OutFunction = Role == EAccessorRole::SETTER \
-		? GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Set) \
-		: GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Get);
+		? GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, Set) \
+		: GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, Get);
 
 #define FUNC_SELECT_GENERIC()  \
 	OutFunction = Role == EAccessorRole::SETTER  \
-		? GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_SetValue_Generic)   \
-		: GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_GetValue_Generic);
+		? GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, Handle_SetValue_Generic)   \
+		: GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, Handle_GetValue_Generic);
 
 	if (TypeInfo.ContainerType == EPropertyBagContainerType::None)
 	{
@@ -219,6 +276,10 @@ EPropertyBagContainerType EAA::Internals::GetContainerTypeFromProperty(const FPr
 	else if (CastField<FSetProperty>(InSourceProperty))
 	{
 		return EPropertyBagContainerType::Set;
+	}
+	else if (CastField<FMapProperty>(InSourceProperty))
+	{ // todo: maps support in 5.8
+		return EPropertyBagContainerType::Count;
 	}
 
 	return EPropertyBagContainerType::None;
@@ -309,6 +370,13 @@ EPropertyBagPropertyType EAA::Internals::GetValueTypeFromProperty(const FPropert
 		return GetValueTypeFromProperty(SetProperty->ElementProp);
 	}
 
+	// Handle map property
+	if (const FMapProperty* MapProperty = CastField<FMapProperty>(InSourceProperty))
+	{
+		checkNoEntry(); // there is no single type for it
+		return EPropertyBagPropertyType::None;
+	}
+
 	return EPropertyBagPropertyType::None;
 }
 
@@ -354,6 +422,13 @@ UObject* EAA::Internals::GetValueTypeObjectFromProperty(const FProperty* InSourc
 	if (const FSetProperty* SetProperty = CastField<FSetProperty>(InSourceProperty))
 	{
 		return GetValueTypeObjectFromProperty(SetProperty->ElementProp);
+	}
+
+	// Handle map property
+	if (const FMapProperty* MapProperty = CastField<FMapProperty>(InSourceProperty))
+	{
+		checkNoEntry(); // there is no single type object for it
+		return nullptr;
 	}
 
 	return nullptr;

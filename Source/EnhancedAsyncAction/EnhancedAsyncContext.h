@@ -4,13 +4,10 @@
 
 #include "UObject/Object.h"
 #include "UObject/Class.h"
-#include "EnhancedAsyncActionContext.generated.h"
+#include "UObject/SoftObjectPtr.h"
+#include "EnhancedAsyncContextTypes.h"
 
 #define UE_API ENHANCEDASYNCACTION_API
-
-struct FPropertyBagContainerTypes;
-enum class EPropertyBagContainerType : uint8;
-enum class EPropertyBagPropertyType : uint8;
 
 #define CONTEXT_DECLARE_SIMPLE_ACCESSOR(Name, Type) \
 	virtual void SetValue ##Name(int32 Index, Type const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
@@ -43,52 +40,6 @@ enum class EPropertyBagPropertyType : uint8;
 #define CONTEXT_DECLARE_SET_ACCESSOR(Name) \
 	virtual void SetValue ##Name(int32 Index, EPropertyBagPropertyType Type, const UObject* TypeObject, const void* PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void GetValue ##Name(int32 Index, EPropertyBagPropertyType Type, const UObject* TypeObject, void* PropertyAddress) CONTEXT_PROPERTY_ACCESSOR_MODE;
-
-/**
- * A helper type containing information about runtime property data without ties to editor.
- */
-struct UE_API FPropertyTypeInfo
-{
-	static const FPropertyTypeInfo Wildcard;
-	static const FPropertyTypeInfo Invalid;
-
-	// container
-	EPropertyBagContainerType ContainerType;
-
-	EPropertyBagPropertyType ValueType; // for singles
-	TObjectPtr<const UObject> ValueTypeObject;
-
-	EPropertyBagPropertyType KeyType; // for maps
-	TObjectPtr<const UObject> KeyTypeObject;
-
-	FPropertyTypeInfo();
-	// normal
-	explicit FPropertyTypeInfo(EPropertyBagPropertyType Type);
-	// from reflection
-	explicit FPropertyTypeInfo(const FProperty* ExistingProperty);
-	// simple
-	FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object);
-
-	//
-	enum EInternalPreset { PRESET_Wildcard, PRESET_Invalid };
-	explicit FPropertyTypeInfo(EInternalPreset Preset);
-
-	bool operator==(const FPropertyTypeInfo&) const = default;
-	bool operator!=(const FPropertyTypeInfo&) const = default;
-
-	bool IsWildcard() const;
-
-	bool IsValid() const;
-
-	/**
-	 *
-	 */
-	static FString EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo);
-	/**
-	 *
-	 */
-	static bool ParseTypeInfo(FString Data, FPropertyTypeInfo& TypeInfo);
-};
 
 /**
  * Async action context data container that is held by manager
@@ -136,30 +87,6 @@ struct UE_API FEnhancedAsyncActionContext
 protected:
 	bool bAddReferencedObjectsAllowed = true;
 	bool bSetupContextAllowed = true;
-};
-
-// Wrapper over actual context data for blueprints
-USTRUCT(BlueprintType, meta=(DisableSplitPin))
-struct UE_API FEnhancedAsyncActionContextHandle
-{
-	GENERATED_BODY()
-public:
-	FEnhancedAsyncActionContextHandle() = default;
-	FEnhancedAsyncActionContextHandle(UObject* Owner, TSharedRef<FEnhancedAsyncActionContext> Ctx);
-
-	/** Is handle valid (has valid owning object and data) */
-	bool IsValid() const;
-	/** Is context data stored externally (in manager) */
-	bool IsExternal() const;
-private:
-	friend class FEnhancedAsyncActionManager;
-
-	UPROPERTY()
-	TWeakObjectPtr<UObject> Owner;
-	UPROPERTY()
-	FName DataProperty;
-
-	TWeakPtr<FEnhancedAsyncActionContext> Data;
 };
 
 #undef UE_API

@@ -1,0 +1,46 @@
+﻿// Copyright 2025, Aquanox.
+
+#pragma once
+
+#include "UObject/Object.h"
+#include "Templates/TypeHash.h"
+#include "EnhancedAsyncContextHandle.h"
+#include "EnhancedAsyncActionHandle.generated.h"
+
+#define UE_API ENHANCEDASYNCACTION_API
+
+// Wrapper over actual context data for blueprints
+USTRUCT(BlueprintType, meta=(DisableSplitPin))
+struct UE_API FEnhancedAsyncActionContextHandle
+#if CPP
+	: public FAsyncContextHandleBase
+#endif
+{
+	GENERATED_BODY()
+public:
+	FEnhancedAsyncActionContextHandle();
+	FEnhancedAsyncActionContextHandle(FAsyncContextId ContextId, TWeakObjectPtr<const UObject> Owner, TSharedRef<FEnhancedAsyncActionContext> Data);
+
+	/** Shortcut to resolve context from manager */
+	TSharedPtr<FEnhancedAsyncActionContext> GetContext() const;
+	/** Shortcut to resolve context from manager */
+	TSharedRef<FEnhancedAsyncActionContext> GetContextSafe() const;
+};
+
+template<>
+struct TStructOpsTypeTraits<FEnhancedAsyncActionContextHandle>
+	: public TStructOpsTypeTraitsBase2<FEnhancedAsyncActionContextHandle>
+{
+	enum
+	{
+		WithCopy = true,
+	};
+};
+
+template<>
+inline FAsyncContextId FAsyncContextId::Make(const UObject* const& InObject)
+{
+	return FAsyncContextId( ::PointerHash(InObject, INDEX_NONE) );
+}
+
+#undef UE_API

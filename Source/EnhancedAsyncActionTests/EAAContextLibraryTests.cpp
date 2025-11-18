@@ -2,15 +2,16 @@
 
 #include "EAAContextLibraryTests.h"
 #include "CoreMinimal.h"
-#include "EnhancedAsyncActionContextLibrary.h"
-#include "EnhancedAsyncActionContext.h"
+#include "EnhancedAsyncContextLibrary.h"
+#include "EnhancedAsyncContext.h"
+#include "EnhancedAsyncActionHandle.h"
 #include "StructUtils/InstancedStruct.h"
 #include "StructUtils/PropertyBag.h"
+#include "EnhancedAsyncContextManager.h"
 #include "EAADemoAsyncAction.h"
 #include "Math/UnrealMathUtility.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
-#include "EnhancedAsyncActionManager.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/AssertionMacros.h"
 
@@ -22,28 +23,23 @@ bool FEAALibraryTestCreate::RunTest(FString const&)
 	FTestWorldScope Scope;
 	auto* World = Scope.World;
 
-	auto NullHandle = UEnhancedAsyncActionContextLibrary::CreateContextForObject(nullptr, NAME_None);
+	auto NullHandle = UEnhancedAsyncContextLibrary::CreateContextForObject(nullptr, NAME_None);
 	UTEST_FALSE_EXPR(NullHandle.IsValid());
-	UTEST_TRUE_EXPR(NullHandle.IsExternal());
 
 	auto* Task = UEAADemoAsyncActionCapture::StartActionWithCapture(World, false, 42);
-	auto TaskHandle = UEnhancedAsyncActionContextLibrary::CreateContextForObject(Task, NAME_None);
+	auto TaskHandle = UEnhancedAsyncContextLibrary::CreateContextForObject(Task, NAME_None);
 	UTEST_TRUE_EXPR(TaskHandle.IsValid());
-	UTEST_TRUE_EXPR(TaskHandle.IsExternal());
 
 	auto* TaskWithContainer = UEAADemoAsyncActionCaptureMember::StartActionWithCaptureFixed(World, false, 42);
-	auto TaskContainerHandle = UEnhancedAsyncActionContextLibrary::CreateContextForObject(TaskWithContainer, TEXT("ContextData"));
+	auto TaskContainerHandle = UEnhancedAsyncContextLibrary::CreateContextForObject(TaskWithContainer, TEXT("ContextData"));
 	UTEST_TRUE_EXPR(TaskContainerHandle.IsValid());
-	UTEST_FALSE_EXPR(TaskContainerHandle.IsExternal());
 
 	auto* SampleObject = NewObject<UBlueprintAsyncActionBase>();
-	auto TaskContainerHandleBadProp = UEnhancedAsyncActionContextLibrary::CreateContextForObject(SampleObject, TEXT("BAD"));
+	auto TaskContainerHandleBadProp = UEnhancedAsyncContextLibrary::CreateContextForObject(SampleObject, TEXT("BAD"));
 	UTEST_TRUE_EXPR(TaskContainerHandleBadProp.IsValid());
-	UTEST_TRUE_EXPR(TaskContainerHandleBadProp.IsExternal());
 
-	auto DebugHandle = UEnhancedAsyncActionContextLibrary::CreateContextForObject(World);
+	auto DebugHandle = UEnhancedAsyncContextLibrary::CreateContextForObject(World);
 	UTEST_TRUE_EXPR(DebugHandle.IsValid());
-	UTEST_TRUE_EXPR(DebugHandle.IsExternal());
 
 	return true;
 };
@@ -54,11 +50,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEAALibraryOpsBasic,
 bool FEAALibraryOpsBasic::RunTest(FString const&)
 {
 	auto* Owner = NewObject<UBlueprintAsyncActionBase>();
-	auto Handle = UEnhancedAsyncActionContextLibrary::CreateContextForObject(Owner, NAME_None);
+	auto Handle = UEnhancedAsyncContextLibrary::CreateContextForObject(Owner, NAME_None);
 	UTEST_TRUE_EXPR(Handle.IsValid());
-	UTEST_TRUE_EXPR(Handle.IsExternal());
 
-	using Lib = UEnhancedAsyncActionContextLibrary;
+	using Lib = UEnhancedAsyncContextLibrary;
 	Lib::Handle_SetValue_Bool(Handle, Test_Prop_Bool, true);
 	Lib::Handle_SetValue_Byte(Handle, Test_Prop_Byte, 42);
 	Lib::Handle_SetValue_Int32(Handle, Test_Prop_Int32, INT_MAX / 2);
@@ -88,13 +83,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEAALibraryOpsComplex,
 bool FEAALibraryOpsComplex::RunTest(FString const&)
 {
 	auto* Owner = NewObject<UBlueprintAsyncActionBase>();
-	auto Handle = UEnhancedAsyncActionContextLibrary::CreateContextForObject(Owner, NAME_None);
+	auto Handle = UEnhancedAsyncContextLibrary::CreateContextForObject(Owner, NAME_None);
 	UTEST_TRUE_EXPR(Handle.IsValid());
-	UTEST_TRUE_EXPR(Handle.IsExternal());
 
-	using Lib = UEnhancedAsyncActionContextLibrary;
+	using Lib = UEnhancedAsyncContextLibrary;
 
-	TSharedPtr<FEnhancedAsyncActionContext> Context = FEnhancedAsyncActionManager::Get().FindContext(Handle);
+	TSharedPtr<FEnhancedAsyncActionContext> Context = FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle);
 	UTEST_TRUE_EXPR(Context.IsValid());
 
 	{

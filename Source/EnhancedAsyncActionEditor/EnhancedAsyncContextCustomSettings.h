@@ -1,6 +1,8 @@
-﻿#pragma once
+﻿// Copyright 2025, Aquanox.
 
-#include "EnhancedAsyncActionSettings.h"
+#pragma once
+
+#include "EnhancedAsyncContextSettings.h"
 #include "IPropertyTypeCustomization.h"
 
 class SToolTip;
@@ -47,31 +49,4 @@ private:
 	TSharedPtr<IPropertyHandle> ClassHandle;
 	TSharedPtr<IPropertyHandle> ContextHandle;
 	TSharedPtr<IPropertyHandle> ContainerHandle;
-};
-
-class FExternalLatentFunctionSpecCustomization : public FPropertyTypeCustomizationShared
-{
-	using Super = FPropertyTypeCustomizationShared;
-	using ThisClass = FExternalLatentFunctionSpecCustomization;
-public:
-	static FName GetTypeName()
-	{
-		return FExternalLatentFunctionSpec::StaticStruct()->GetFName();
-	}
-	static TSharedRef<IPropertyTypeCustomization> MakeInstance()
-	{
-		return MakeShared<ThisClass>();
-	}
-
-	virtual void CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils) override;
-
-	void OnClassChanged();
-	void OnPopulateFunctionCombo(TArray<TSharedPtr<FString>>& OutComboBoxStrings, TArray<TSharedPtr<SToolTip>>& OutToolTips, TArray<bool>& OutRestrictedItems) const;
-	bool IsValidClass() const;
-private:
-
-	TSharedPtr<IPropertyHandle> ClassHandle;
-	TSharedPtr<IPropertyHandle> FunctionHandle;
-
-	TArray<TSharedPtr<FString>> FunctionParams;
 };

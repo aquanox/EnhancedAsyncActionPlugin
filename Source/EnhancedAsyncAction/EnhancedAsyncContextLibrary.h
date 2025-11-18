@@ -3,16 +3,18 @@
 #pragma once
 
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "EnhancedAsyncActionContext.h"
-#include "EnhancedAsyncActionContextLibrary.generated.h"
+#include "EnhancedAsyncContextLibrary.generated.h"
 
 #define UE_API ENHANCEDASYNCACTION_API
+
+struct FEnhancedAsyncActionContextHandle;
+struct FEnhancedLatentActionContextHandle;
 
 /**
  * Blueprint integration helpers
  */
 UCLASS(MinimalAPI)
-class UEnhancedAsyncActionContextLibrary : public UBlueprintFunctionLibrary
+class UEnhancedAsyncContextLibrary : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
 
@@ -27,6 +29,22 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=false, AdvancedDisplay=1))
 	static UE_API FEnhancedAsyncActionContextHandle CreateContextForObject(const UObject* Action, FName InnerContainerProperty = NAME_None);
+
+	/**
+	 * Create capture context handle for latent function. Called by UK2Node_EnhancedCallLatentFunction.
+	 *
+	 * @return Context handle
+	 */
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=false))
+	static UE_API FEnhancedLatentActionContextHandle CreateContextForLatent(const struct FLatentCallResult& CallInfo);
+
+	/**
+	 * Destroy capture context used by latent function. Called by UK2Node_EnhancedCallLatentFunction.
+	 *
+	 * @return Context handle
+	 */
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=false))
+	static UE_API void DestroyContextForLatent(const struct FLatentCallResult& CallInfo);
 
 	/**
 	 * Setup context container according to spec string. Called by UK2Node_EnhancedAsyncAction.
@@ -44,9 +62,9 @@ public:
 	static UE_API void SetupContextContainer(const FEnhancedAsyncActionContextHandle& Handle, FString Config);
 
 	/**
-	 * Acquire capture context handle for async action and check validity. Called by UK2Node_EnhancedAsyncAction.
+	 * Acquire capture context handle for async action and check validity.
 	 *
-	 * Called from generated delegates.
+	 * Called by UK2Node_EnhancedAsyncAction from generated delegates.
 	 *
 	 * @param Action Object to search context for
 	 * @param Handle Found handle
@@ -56,15 +74,8 @@ public:
 	static UE_API void FindCaptureContextForObject(const UObject* Action, FEnhancedAsyncActionContextHandle& Handle, bool& Valid);
 
 	/**
-	 * Test if capture context handle valid
-	 * @param Handle  Capture ontext handle
-	 * @return true if handle valid
-	 */
-	UFUNCTION(BlueprintPure, Category="EnhancedAsyncAction|Core")
-	static UE_API bool IsValidContext(const FEnhancedAsyncActionContextHandle& Handle);
-
-	/**
-	 * Acquire capture context handle for async action
+	 * Acquire capture context handle for async action. Called by UK2Node_EnhancedAsyncAction or Tests.
+	 *
 	 * @param Action Action proxy object
 	 * @return Context handle
 	 */

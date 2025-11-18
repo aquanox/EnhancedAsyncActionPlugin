@@ -4,9 +4,9 @@
 
 #include "BlueprintActionDatabaseRegistrar.h"
 #include "BlueprintFunctionNodeSpawner.h"
-#include "EnhancedAsyncActionSettings.h"
-#include "EnhancedAsyncActionShared.h"
-#include "EnhancedAsyncActionPrivate.h"
+#include "EnhancedAsyncContextSettings.h"
+#include "EnhancedAsyncContextShared.h"
+#include "EnhancedAsyncContextPrivate.h"
 #include "Kismet/BlueprintAsyncActionBase.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(K2Node_EnhancedAsyncAction)
@@ -83,7 +83,7 @@ void UK2Node_EnhancedAsyncAction::GetMenuActions(FBlueprintActionDatabaseRegistr
 			CustomizeNodeDelegate = UBlueprintNodeSpawner::FCustomizeNodeDelegate::CreateStatic(&GetMenuActions_Utils::SetNodeFunc, FunctionPtr);
 			DynamicUiSignatureGetter = UBlueprintNodeSpawner::FUiSpecOverrideDelegate::CreateStatic(&GetMenuActions_Utils::UiSpecCustomizer, bSuffix, false);
 		}
-		else if (auto* Spec = UEnhancedAsyncActionSettings::Get()->FindActionSpecForClass(FactoryClass))
+		else if (auto* Spec = UEnhancedAsyncContextSettings::Get()->FindActionSpecForClass(FactoryClass))
 		{
 			bool bSuffix = true;
 			CustomizeNodeDelegate = UBlueprintNodeSpawner::FCustomizeNodeDelegate::CreateStatic(&GetMenuActions_Utils::SetNodeExternal, FunctionPtr, *Spec);

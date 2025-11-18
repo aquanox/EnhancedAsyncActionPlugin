@@ -2,13 +2,9 @@
 
 #pragma once
 
-#include "EnhancedAsyncActionContext.h"
 #include "UObject/Class.h"
 #include "UObject/Object.h"
 #include "UObject/UnrealType.h"
-
-class FMulticastDelegateProperty;
-struct FPropertyTypeInfo;
 
 #define UE_API ENHANCEDASYNCACTION_API
 
@@ -20,8 +16,6 @@ namespace EAA::Switches
 	constexpr bool bDebugTooltips = false;
 	// uses variadic set/get function instead of multiple single get/set
 	constexpr bool bVariadicGetSet = true;
-	// use latents
-	constexpr bool bWithLatent = false;
 }
 
 namespace EAA::Internals
@@ -79,71 +73,6 @@ namespace EAA::Internals
 
 	UE_API int32 FindPinIndex(const FName& Name);
 	UE_API FName MirrorPinName(const FName& Name);
-
-	UE_API bool HasAccessorForType(const FPropertyTypeInfo& TypeInfo);
-
-	enum class EAccessorRole { GETTER, SETTER };
-	enum class EContainerType { SINGLE, ARRAY, MAP, SET };
-
-	/**
-	 * Select suitable accessor for specified property combination
-	 */
-	UE_API bool SelectAccessorForType(const FPropertyTypeInfo& TypeInfo, EAccessorRole Role, FName& OutFunction);
-
-	EPropertyBagContainerType GetContainerTypeFromProperty(const FProperty* InSourceProperty);
-	EPropertyBagPropertyType GetValueTypeFromProperty(const FProperty* InSourceProperty);
-	UObject* GetValueTypeObjectFromProperty(const FProperty* InSourceProperty);
-
-	/**
-	 *
-	 * @tparam TProperty
-	 * @tparam TValueType
-	 */
-	template<typename TProperty, typename TValueType>
-	struct TWeakMemberRef
-	{
-		TWeakMemberRef(UObject* InOwner, const FName& InMember) : Owner(InOwner), MemberProperty(InMember)
-		{
-			check(!InMember.IsNone());
-		}
-
-		const bool IsValid() const { return Owner.IsValid(); }
-
-		UObject* GetOwner()
-		{
-			UObject* const WeakOwner = Owner.Get();
-			if (WeakOwner != CachedOwner)
-			{
-				Initialize(WeakOwner);
-			}
-			return WeakOwner;
-		}
-
-		TPair<TProperty*, TValueType*> GetPropertyAndValue()
-		{
-			UObject* const WeakOwner = Owner.Get();
-			if (WeakOwner != CachedOwner)
-			{
-				Initialize(WeakOwner);
-			}
-			return TPair(CachedProperty, CachedValueType);
-		}
-
-	private:
-		void Initialize(UObject* In)
-		{
-			CachedOwner = In;
-			CachedProperty = In ? CastField<TProperty>(In->GetClass()->FindPropertyByName(MemberProperty)) : nullptr;
-			CachedValueType = CachedProperty ? CachedProperty->template ContainerPtrToValuePtr<TValueType>(In) : nullptr;
-		}
-	private:
-		TWeakObjectPtr<UObject> Owner;
-		FName MemberProperty;
-
-		const UObject* CachedOwner = nullptr;
-		TProperty* CachedProperty = nullptr;
-		TValueType* CachedValueType = nullptr;
-	};
 }
 
 UE_API DECLARE_LOG_CATEGORY_EXTERN(LogEnhancedAction, All, All);

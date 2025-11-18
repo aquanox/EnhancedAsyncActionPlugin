@@ -1,7 +1,7 @@
 ﻿// Copyright 2025, Aquanox.
 
 #include "EnhancedAsyncActionEditorModule.h"
-#include "EnhancedAsyncActionCustomSettings.h"
+#include "EnhancedAsyncContextCustomSettings.h"
 #include "PropertyEditorModule.h"
 
 IMPLEMENT_MODULE(FEnhancedAsyncActionEditorModule, EnhancedAsyncActionEditor)
@@ -29,10 +29,6 @@ void FEnhancedAsyncActionEditorModule::RegisterCustomSettings()
 		FExternalAsyncActionSpecCustomization::GetTypeName(),
 		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FExternalAsyncActionSpecCustomization::MakeInstance)
 	);
-	PropertyModule.RegisterCustomPropertyTypeLayout(
-		FExternalLatentFunctionSpecCustomization::GetTypeName(),
-		FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FExternalLatentFunctionSpecCustomization::MakeInstance)
-	);
 }
 
 void FEnhancedAsyncActionEditorModule::UnRegisterCustomSettings()
@@ -40,8 +36,5 @@ void FEnhancedAsyncActionEditorModule::UnRegisterCustomSettings()
 	FPropertyEditorModule& PropertyModule = FModuleManager::GetModuleChecked<FPropertyEditorModule>("PropertyEditor");
 	PropertyModule.UnregisterCustomPropertyTypeLayout(
 		FExternalAsyncActionSpecCustomization::GetTypeName()
-	);
-	PropertyModule.UnregisterCustomPropertyTypeLayout(
-		FExternalLatentFunctionSpecCustomization::GetTypeName()
 	);
 }

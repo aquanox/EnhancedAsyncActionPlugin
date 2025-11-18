@@ -1,17 +1,17 @@
 ﻿// Copyright 2025, Aquanox.
 
 #include "K2Node_EnhancedCallLatentFunction.h"
-#include "EnhancedAsyncActionShared.h"
-#include "EnhancedAsyncActionPrivate.h"
-#include "EnhancedAsyncActionSettings.h"
+#include "EnhancedAsyncContextShared.h"
+#include "EnhancedAsyncContextPrivate.h"
 #include "BlueprintActionDatabaseRegistrar.h"
 #include "BlueprintFunctionNodeSpawner.h"
 #include "BlueprintNodeSpawner.h"
+#include "EnhancedLatentActionHandle.h"
 
 void UK2Node_EnhancedCallLatentFunction::GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const
 {
 	UClass* NodeClass = GetClass();
-	if (!ActionRegistrar.IsOpenForRegistration(NodeClass) || !EAA::Switches::bWithLatent)
+	if (!ActionRegistrar.IsOpenForRegistration(NodeClass))
 		return;
 
 	struct GetMenuActions_Utils
@@ -24,19 +24,13 @@ void UK2Node_EnhancedCallLatentFunction::GetMenuActions(FBlueprintActionDatabase
 			}
 		}
 
-		static void SetNodeExternal(UEdGraphNode* NewNode, bool bIsTemplateNode, TWeakObjectPtr<UFunction> FunctionPtr, FExternalLatentFunctionSpec Spec)
-		{
-			if (FunctionPtr.IsValid())
-			{
-				CastChecked<ThisClass>(NewNode)->SetupFromSpec(Spec);
-			}
-		}
-
 		static void UiSpecCustomizer(FBlueprintActionContext const& Context, IBlueprintNodeBinder::FBindingSet const& Bindings, FBlueprintActionUiSpec* UiSpecOut)
 		{
 			UiSpecOut->MenuName = FText::Format(INVTEXT("{0} (Capture)"), UiSpecOut->MenuName);
 		}
 	};
+
+	const UStruct* RequiredReturnParamType = FLatentCallResult::StaticStruct();
 
 	for (TObjectIterator<UFunction> It; It; ++It)
 	{
@@ -46,15 +40,14 @@ void UK2Node_EnhancedCallLatentFunction::GetMenuActions(FBlueprintActionDatabase
 		if (!Function->HasMetaData(FBlueprintMetadata::MD_Latent))
 			continue;
 
+		auto ReturnProp = CastField<FStructProperty>(Function->GetReturnProperty());
+		if (!ReturnProp || ReturnProp->Struct != RequiredReturnParamType)
+			continue;
+
 		UBlueprintNodeSpawner::FCustomizeNodeDelegate CustomizeNodeDelegate;
 		UBlueprintNodeSpawner::FUiSpecOverrideDelegate DynamicUiSignatureGetter;
 
 		if (Function->HasMetaData(EAA::Internals::MD_HasAsyncContext) || Function->HasMetaData(EAA::Internals::MD_HasLatentContext))
-		{
-			CustomizeNodeDelegate = UBlueprintNodeSpawner::FCustomizeNodeDelegate::CreateStatic(&GetMenuActions_Utils::SetNodeFunc, MakeWeakObjectPtr(Function));
-			DynamicUiSignatureGetter = UBlueprintNodeSpawner::FUiSpecOverrideDelegate::CreateStatic(&GetMenuActions_Utils::UiSpecCustomizer);
-		}
-		else if (auto* Spec = UEnhancedAsyncActionSettings::Get()->FindLatentSpecForFunction(Function))
 		{
 			CustomizeNodeDelegate = UBlueprintNodeSpawner::FCustomizeNodeDelegate::CreateStatic(&GetMenuActions_Utils::SetNodeFunc, MakeWeakObjectPtr(Function));
 			DynamicUiSignatureGetter = UBlueprintNodeSpawner::FUiSpecOverrideDelegate::CreateStatic(&GetMenuActions_Utils::UiSpecCustomizer);
@@ -91,6 +84,11 @@ void UK2Node_EnhancedCallLatentFunction::SetupFromSpec(const FExternalLatentFunc
 void UK2Node_EnhancedCallLatentFunction::AllocateDefaultPins()
 {
 	Super::AllocateDefaultPins();
+
+	auto ReturnPin = GetReturnValuePin();
+	check(ReturnPin && ReturnPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Struct);
+	ReturnPin->PinFriendlyName = INVTEXT("Latent Result");
+	ReturnPin->bHidden = true;
 }
 
 int32 UK2Node_EnhancedCallLatentFunction::GetNumCaptures() const
@@ -110,7 +108,7 @@ TArray<FEnhancedAsyncTaskCapture>& UK2Node_EnhancedCallLatentFunction::GetMutabl
 
 bool UK2Node_EnhancedCallLatentFunction::CanAddPin() const
 {
-	return IK2Node_AddPinInterface::CanAddPin();
+	return GetNumCaptures() < GetMaxCapturePins();
 }
 
 void UK2Node_EnhancedCallLatentFunction::AddInputPin()
@@ -119,7 +117,7 @@ void UK2Node_EnhancedCallLatentFunction::AddInputPin()
 
 bool UK2Node_EnhancedCallLatentFunction::CanRemovePin(const UEdGraphPin* Pin) const
 {
-	return IK2Node_AddPinInterface::CanRemovePin(Pin);
+	return Pin ; //&& IsCapturePin(Pin);
 }
 
 void UK2Node_EnhancedCallLatentFunction::RemoveInputPin(UEdGraphPin* Pin)

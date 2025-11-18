@@ -1,11 +1,8 @@
 ﻿// Copyright 2025, Aquanox.
 
-#include "EnhancedAsyncActionPrivate.h"
-#include "EnhancedAsyncActionShared.h"
-#include "EnhancedAsyncActionContextLibrary.h"
-#include "Kismet/BlueprintAsyncActionBase.h"
+#include "EnhancedAsyncContextPrivate.h"
+#include "EnhancedAsyncContextShared.h"
 #include "StructUtils/PropertyBag.h"
-#include "K2Node_EnhancedAsyncTaskBase.h"
 #include "K2Node_CallFunction.h"
 
 FString EAA::Internals::ToDebugString(const FProperty* Pin)
@@ -40,7 +37,7 @@ FString EAA::Internals::ToDebugString(const FEdGraphPinType& Type)
 	return Buffer.ToString();
 }
 
-FString EAA::Internals::ToDebugString(const UK2Node_EnhancedAsyncTaskBase* Node)
+FString EAA::Internals::ToDebugString(const UK2Node* Node)
 {
 	FStringBuilderBase Buffer;
 	Buffer.Append(Node->GetPathName());

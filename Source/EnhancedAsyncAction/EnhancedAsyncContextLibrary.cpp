@@ -1,16 +1,18 @@
 ﻿// Copyright 2025, Aquanox.
 
-#include "EnhancedAsyncActionContextLibrary.h"
+#include "EnhancedAsyncContextLibrary.h"
 
 #include "Blueprint/BlueprintExceptionInfo.h"
 #include "Engine/Engine.h"
-#include "EnhancedAsyncActionManager.h"
-#include "EnhancedAsyncActionContextImpl.h"
-#include "EnhancedAsyncActionShared.h"
+#include "EnhancedAsyncContextManager.h"
+#include "EnhancedAsyncContextImpl.h"
+#include "EnhancedAsyncContextShared.h"
+#include "EnhancedAsyncActionHandle.h"
+#include "EnhancedLatentActionHandle.h"
 #include "Logging/StructuredLog.h"
 #include "UObject/TextProperty.h"
 
-#include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedAsyncActionContextLibrary)
+#include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedAsyncContextLibrary)
 
 #define EAA_KISMET_ARRAY_ENSURE(Expr) \
 	if (!ensureAlways(Expr))  { \
@@ -25,13 +27,9 @@
 		return; \
 	}
 
-FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::CreateContextForObject(const UObject* Action, FName InDataProperty)
+FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::CreateContextForObject(const UObject* Action, FName InDataProperty)
 {
-	FEnhancedAsyncActionManager::FCreateContextParams Params;
-	Params.Action = Action;
-	Params.InnerProperty = InDataProperty;
-
-	auto ValueOrError = FEnhancedAsyncActionManager::Get().CreateContext(Params);
+	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(Action, InDataProperty);
 	if (ValueOrError.HasError())
 	{
 		UE_LOG(LogEnhancedAction, Log, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
@@ -40,7 +38,23 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::CreateCont
 	return ValueOrError.GetValue();
 }
 
-void UEnhancedAsyncActionContextLibrary::SetupContextContainer(const FEnhancedAsyncActionContextHandle& Handle, FString Config)
+FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateContextForLatent(const struct FLatentCallResult& CallInfo)
+{
+	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(CallInfo);
+	if (ValueOrError.HasError())
+	{
+		UE_LOG(LogEnhancedAction, Log, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
+		return FEnhancedLatentActionContextHandle();
+	}
+	return ValueOrError.GetValue();
+}
+
+void UEnhancedAsyncContextLibrary::DestroyContextForLatent(const struct FLatentCallResult& CallInfo)
+{
+	FEnhancedAsyncContextManager::Get().DestroyContext(CallInfo);
+}
+
+void UEnhancedAsyncContextLibrary::SetupContextContainer(const FEnhancedAsyncActionContextHandle& Handle, FString Config)
 {
 	if (!Handle.IsValid())
 	{
@@ -48,12 +62,12 @@ void UEnhancedAsyncActionContextLibrary::SetupContextContainer(const FEnhancedAs
 		return;
 	}
 
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetupFromStringDefinition(Config);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetupFromStringDefinition(Config);
 }
 
-FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::GetContextForObject(const UObject* Action)
+FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::GetContextForObject(const UObject* Action)
 {
-	auto Context = FEnhancedAsyncActionManager::Get().FindContextHandle(Action);
+	auto Context = FEnhancedAsyncContextManager::Get().FindContextHandle(Action);
 	if (!Context.IsValid())
 	{
 		FFrame::KismetExecutionMessage(TEXT("GetContextForObject failed for node"), ELogVerbosity::Error, TEXT("EAA_GetCaptureContext"));
@@ -61,9 +75,10 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncActionContextLibrary::GetContext
 	return Context;
 }
 
-void UEnhancedAsyncActionContextLibrary::DumpContextForObject(const UObject* Action)
+void UEnhancedAsyncContextLibrary::DumpContextForObject(const UObject* Action)
 {
-	auto Context = FEnhancedAsyncActionManager::Get().FindContextSafe(Action);
+	auto Context = FEnhancedAsyncContextManager::Get().FindContext(FAsyncContextId::Make(Action));
+	if (Context)
 	{
 		FStringBuilderBase Builder;
 		Context->DebugDump(Builder);
@@ -71,9 +86,9 @@ void UEnhancedAsyncActionContextLibrary::DumpContextForObject(const UObject* Act
 	}
 }
 
-void UEnhancedAsyncActionContextLibrary::DumpContext(const FEnhancedAsyncActionContextHandle& Handle)
+void UEnhancedAsyncContextLibrary::DumpContext(const FEnhancedAsyncActionContextHandle& Handle)
 {
-	auto Context = FEnhancedAsyncActionManager::Get().FindContextSafe(Handle);
+	auto Context = FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback);
 	{
 		FStringBuilderBase Builder;
 		Context->DebugDump(Builder);
@@ -81,74 +96,69 @@ void UEnhancedAsyncActionContextLibrary::DumpContext(const FEnhancedAsyncActionC
 	}
 }
 
-void UEnhancedAsyncActionContextLibrary::FindCaptureContextForObject(const UObject* Action, FEnhancedAsyncActionContextHandle& Handle, bool& Valid)
+void UEnhancedAsyncContextLibrary::FindCaptureContextForObject(const UObject* Action, FEnhancedAsyncActionContextHandle& Handle, bool& Valid)
 {
 	Valid = false;
 	if (IsValid(Action))
 	{
-		Handle = FEnhancedAsyncActionManager::Get().FindContextHandle(Action);
+		Handle = FEnhancedAsyncContextManager::Get().FindContextHandle(Action);
 		Valid = Handle.IsValid();
 	}
 }
 
-bool UEnhancedAsyncActionContextLibrary::IsValidContext(const FEnhancedAsyncActionContextHandle& Handle)
-{
-	return Handle.IsValid();
-}
-
 // =================== SETTERS ===========================
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Bool(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const bool& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Bool(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const bool& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueBool(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueBool(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Byte(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const uint8& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Byte(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const uint8& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueByte(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueByte(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Int32(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Int32(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueInt32(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueInt32(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Int64(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int64& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Int64(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int64& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueInt64(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueInt64(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Float(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const float& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Float(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const float& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueFloat(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueFloat(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Double(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const double& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Double(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const double& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueDouble(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueDouble(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_String(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FString& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_String(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FString& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueString(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueString(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Name(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FName& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Name(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FName& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueName(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueName(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FText& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FText& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->SetValueText(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->SetValueText(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Variadic)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Variadic)
 {
 	// Read the standard function arguments
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
@@ -180,7 +190,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Variadic
 	P_FINISH;
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	if (ContextSafe->CanSetupContext())
 	{
 		ContextSafe->SetupFromProperties(SetupInputs);
@@ -203,12 +213,12 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Variadic
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Generic)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Generic)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
 	P_GET_PROPERTY(FIntProperty, ParamIndex);
@@ -226,7 +236,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Generic)
 	EAA_KISMET_ENSURE(ValueProp != nullptr && ValuePtr != nullptr, "Failed to resolve the Value Property for Set Value Basic");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 
 	FString Message;
 	if (!ensureAlways(ContextSafe->SetValueByIndex(ParamIndex, ValueProp, ValuePtr, Message)))
@@ -237,12 +247,12 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Generic)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Enum)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Enum)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -257,17 +267,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Enum)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Enum");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->SetValueEnum(ParamIndex, ParamValueProp->GetEnum(),  ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Struct)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Struct)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -283,17 +293,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Struct)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr && ParamValue != nullptr, "Failed to resolve the Value Property for Set Value Struct");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->SetValueStruct(ParamIndex, ParamValueProp->Struct, (const uint8*)ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject* Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject* Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Object)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Object)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -304,17 +314,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Object)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Object");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->SetValueObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject> Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject> Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftObject)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_SoftObject)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -325,17 +335,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftObje
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Soft Object");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->SetValueSoftObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass* Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass* Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Class)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Class)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -346,17 +356,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Class)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Class");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->SetValueClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject> Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject> Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftClass)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_SoftClass)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -367,17 +377,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_SoftClas
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Failed to resolve the Value Property for Set Value Class");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->SetValueSoftClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TArray<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TArray<int32>& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Array)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Array)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -395,7 +405,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Array)
 	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr && ArrayAddr != nullptr);
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	auto ValueType = EAA::Internals::GetValueTypeFromProperty(ArrayProperty);
 	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ArrayProperty);
 
@@ -405,11 +415,11 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Array)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_SetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TSet<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TSet<int32>& Value)
 {
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Set)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -417,7 +427,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
 	// Read wildcard Value input.
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
-	Stack.StepCompiledIn<FSetProperty>(NULL);
+	Stack.StepCompiledIn<FSetProperty>(nullptr);
 
 	FSetProperty* SetProperty = CastField<FSetProperty>(Stack.MostRecentProperty);
 	const void* SetAddr = Stack.MostRecentPropertyAddress;
@@ -427,7 +437,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
 	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	auto ValueType = EAA::Internals::GetValueTypeFromProperty(SetProperty);
 	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(SetProperty);
 
@@ -439,57 +449,57 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_SetValue_Set)
 
 // ==================== GETTERS =========================
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Bool(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, bool& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Bool(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, bool& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueBool(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueBool(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Byte(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, uint8& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Byte(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, uint8& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueByte(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueByte(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Int32(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Int32(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueInt32(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueInt32(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Int64(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int64& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Int64(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int64& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueInt64(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueInt64(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Float(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, float& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Float(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, float& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueFloat(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueFloat(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Double(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, double& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Double(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, double& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueDouble(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueDouble(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_String(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FString& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_String(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FString& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueString(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueString(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Name(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FName& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Name(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FName& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueName(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueName(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FText& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FText& Value)
 {
-	FEnhancedAsyncActionManager::Get().FindContextSafe(Handle)->GetValueText(Index, Value);
+	FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle, EResolveErrorMode::Fallback)->GetValueText(Index, Value);
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Variadic)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Variadic)
 {
 	// Read the standard function arguments
     P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
@@ -519,7 +529,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Variadic
     P_FINISH;
 
     P_NATIVE_BEGIN;
-    auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+    auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	for (const FOutputParam& Input : VarOutputs)
 	{
 		FString Message;
@@ -537,12 +547,12 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Variadic
     P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
 {
 
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Generic)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Generic)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
 	P_GET_PROPERTY(FIntProperty, ParamIndex);
@@ -560,7 +570,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Generic)
 
 	P_NATIVE_BEGIN;
 
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 
 	FString Message;
 	if (!ensureAlways(ContextSafe->GetValueByIndex(ParamIndex, ValueProp, ValuePtr, Message)))
@@ -572,12 +582,12 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Generic)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Enum)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Enum)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -593,17 +603,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Enum)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Enum");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->GetValueEnum(ParamIndex, ParamValueProp->GetEnum(), ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Struct)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Struct)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -620,7 +630,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Struct)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr && ParamValue != nullptr, "Unsupported property type the Value for Set Value Struct");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	const uint8* Result = nullptr;
 	ContextSafe->GetValueStruct(ParamIndex, ParamValueProp->Struct, Result);
 	if (Result)
@@ -630,12 +640,12 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Struct)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject*& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject*& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Object)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Object)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -646,17 +656,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Object)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Object");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->GetValueObject(ParamIndex, ParamValueProp->PropertyClass, P_ARG_GC_BARRIER(ParamValue));
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject>& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftObject)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_SoftObject)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -667,17 +677,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftObje
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Get Value Soft Object");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->GetValueSoftObject(ParamIndex, ParamValueProp->PropertyClass, ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass*& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass*& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Class)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Class)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -688,17 +698,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Class)
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Set Value Class");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->GetValueClass(ParamIndex, ParamValueProp->MetaClass, P_ARG_GC_BARRIER(ParamValue));
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject>& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftClass)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_SoftClass)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -709,17 +719,17 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_SoftClas
 	EAA_KISMET_ENSURE(ParamValueProp != nullptr, "Unsupported property type the Value for Get Value Soft Class");
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	ContextSafe->GetValueSoftClass(ParamIndex, ParamValueProp->MetaClass, ParamValue);
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TArray<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TArray<int32>& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Array)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Array)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -737,7 +747,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Array)
 	EAA_KISMET_ARRAY_ENSURE(ArrayProperty != nullptr && ArrayAddr != nullptr);
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	auto ValueType = EAA::Internals::GetValueTypeFromProperty(ArrayProperty);
 	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ArrayProperty);
 
@@ -747,12 +757,12 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Array)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncActionContextLibrary::Handle_GetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSet<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSet<int32>& Value)
 {
 	checkNoEntry();
 }
 
-DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Set)
+DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Set)
 {
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
@@ -770,7 +780,7 @@ DEFINE_FUNCTION(UEnhancedAsyncActionContextLibrary::execHandle_GetValue_Set)
 	EAA_KISMET_ARRAY_ENSURE(SetProperty != nullptr && SetAddr != nullptr);
 
 	P_NATIVE_BEGIN;
-	auto ContextSafe = FEnhancedAsyncActionManager::Get().FindContextSafe(ParamHandle);
+	auto ContextSafe = FEnhancedAsyncContextManager::Get().ResolveContextHandle(ParamHandle);
 	auto ValueType = EAA::Internals::GetValueTypeFromProperty(SetProperty);
 	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(SetProperty);
 

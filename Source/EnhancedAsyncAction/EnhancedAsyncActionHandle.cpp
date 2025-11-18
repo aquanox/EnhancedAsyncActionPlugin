@@ -1,0 +1,24 @@
+﻿#include "EnhancedAsyncActionHandle.h"
+#include "EnhancedAsyncContextManager.h"
+
+#include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedAsyncActionHandle)
+
+FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle()
+	: FAsyncContextHandleBase(FAsyncContextId::Invalid)
+{
+}
+
+FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(FAsyncContextId ContextId, TWeakObjectPtr<const UObject> Owner, TSharedRef<FEnhancedAsyncActionContext> Data)
+	: FAsyncContextHandleBase(ContextId, Owner, Data)
+{
+}
+
+TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncActionContextHandle::GetContext() const
+{
+	return FEnhancedAsyncContextManager::Get().ResolveContextHandle(*this, EResolveErrorMode::AllowNull);
+}
+
+TSharedRef<FEnhancedAsyncActionContext> FEnhancedAsyncActionContextHandle::GetContextSafe() const
+{
+	return FEnhancedAsyncContextManager::Get().ResolveContextHandle(*this, EResolveErrorMode::Fallback).ToSharedRef();
+}

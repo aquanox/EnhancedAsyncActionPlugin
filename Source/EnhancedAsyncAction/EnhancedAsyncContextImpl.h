@@ -3,8 +3,8 @@
 #pragma once
 
 #include "StructUtils/PropertyBag.h"
-#include "EnhancedAsyncActionShared.h"
-#include "EnhancedAsyncActionContext.h"
+#include "EnhancedAsyncContextShared.h"
+#include "EnhancedAsyncContext.h"
 
 #define UE_API ENHANCEDASYNCACTION_API
 
@@ -87,7 +87,7 @@ protected:
 	inline class FFrieldlyInstancedPropertyBag* GetValueRef() const;
 
 	FInstancedPropertyBag* ValueRef = nullptr;
-	bool bPropertyBagStructureLocked			= false;
+	bool bPropertyBagStructureLocked = false;
 };
 
 /**
@@ -100,6 +100,7 @@ class UE_API FEnhancedAsyncActionContext_PropertyBagRef : public FEnhancedAsyncA
 	using Super = FEnhancedAsyncActionContext_PropertyBagBase;
 public:
 	FEnhancedAsyncActionContext_PropertyBagRef(const UObject* OwningObject, FName PropertyName);
+	FEnhancedAsyncActionContext_PropertyBagRef(const UObject* OwningObject, FInstancedPropertyBag* ContainerObject, bool bExpose);
 
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBagRef"); }
 	virtual bool IsValid() const override;
@@ -116,7 +117,7 @@ class UE_API FEnhancedAsyncActionContext_PropertyBag : public FEnhancedAsyncActi
 {
 	using Super = FEnhancedAsyncActionContext_PropertyBagBase;
 public:
-	FEnhancedAsyncActionContext_PropertyBag(const UObject* OwningObject);
+	explicit FEnhancedAsyncActionContext_PropertyBag(const UObject* OwningObject);
 
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBag"); }
 	virtual bool IsValid() const override;

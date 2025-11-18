@@ -5,7 +5,7 @@
 #include "BlueprintActionDatabaseRegistrar.h"
 #include "BlueprintFunctionNodeSpawner.h"
 #include "EdGraphSchema_K2.h"
-#include "EnhancedAsyncActionContextLibrary.h"
+#include "EnhancedAsyncContextLibrary.h"
 #include "K2Node_CallFunction.h"
 #include "K2Node_IfThenElse.h"
 #include "K2Node_TemporaryVariable.h"
@@ -13,12 +13,12 @@
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "KismetCompiler.h"
 #include "ScopedTransaction.h"
-#include "EnhancedAsyncActionShared.h"
+#include "EnhancedAsyncContextShared.h"
 #include "K2Node_AddDelegate.h"
 #include "K2Node_AssignmentStatement.h"
 #include "K2Node_CustomEvent.h"
-#include "EnhancedAsyncActionPrivate.h"
-#include "EnhancedAsyncActionSettings.h"
+#include "EnhancedAsyncContextPrivate.h"
+#include "EnhancedAsyncContextSettings.h"
 #include "K2Node_CallArrayFunction.h"
 #include "K2Node_MakeArray.h"
 #include "StructUtils/PropertyBag.h"
@@ -819,7 +819,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
 				CallNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 			}
 
-			CallNode->FunctionReference.SetExternalMember(SetValueFunc, UEnhancedAsyncActionContextLibrary::StaticClass());
+			CallNode->FunctionReference.SetExternalMember(SetValueFunc, UEnhancedAsyncContextLibrary::StaticClass());
 			CallNode->AllocateDefaultPins();
 			ensure(CallNode->GetTargetFunction() != nullptr);
 		}
@@ -869,8 +869,8 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 	// Create Call "Set Context Variadic"
 	UK2Node_CallFunction* CallSetVariadic = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 	CallSetVariadic->FunctionReference.SetExternalMember(
-		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_SetValue_Variadic),
-		UEnhancedAsyncActionContextLibrary::StaticClass()
+		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, Handle_SetValue_Variadic),
+		UEnhancedAsyncContextLibrary::StaticClass()
 	);
 	CallSetVariadic->AllocateDefaultPins();
 
@@ -1040,8 +1040,8 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleActionDelegates(
 		{
 			UK2Node_CallFunction* const CallGetCtx = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 			CallGetCtx->FunctionReference.SetExternalMember(
-				GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, FindCaptureContextForObject),
-				UEnhancedAsyncActionContextLibrary::StaticClass());
+				GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, FindCaptureContextForObject),
+				UEnhancedAsyncContextLibrary::StaticClass());
 			CallGetCtx->AllocateDefaultPins();
 
 			UEdGraphPin* PinWithData = CurrentCENode->FindPin(AsyncContextParameterName);
@@ -1125,7 +1125,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextData(
 			{
 				CallReadNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 			}
-			CallReadNode->FunctionReference.SetExternalMember(GetValueFunc, UEnhancedAsyncActionContextLibrary::StaticClass());
+			CallReadNode->FunctionReference.SetExternalMember(GetValueFunc, UEnhancedAsyncContextLibrary::StaticClass());
 			CallReadNode->AllocateDefaultPins();
 			ensure(CallReadNode->GetTargetFunction() != nullptr);
 		}
@@ -1203,8 +1203,8 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
 
 	auto CallGetVariadic = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 	CallGetVariadic->FunctionReference.SetExternalMember(
-		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, Handle_GetValue_Variadic),
-		UEnhancedAsyncActionContextLibrary::StaticClass()
+		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, Handle_GetValue_Variadic),
+		UEnhancedAsyncContextLibrary::StaticClass()
 	);
 	CallGetVariadic->AllocateDefaultPins();
 
@@ -1404,8 +1404,8 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	// Create a call to context creation function and obtain handle
 	UK2Node_CallFunction* const CallCreateCaptureNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 	CallCreateCaptureNode->FunctionReference.SetExternalMember(
-		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, CreateContextForObject),
-		UEnhancedAsyncActionContextLibrary::StaticClass()
+		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateContextForObject),
+		UEnhancedAsyncContextLibrary::StaticClass()
 	);
 	CallCreateCaptureNode->AllocateDefaultPins();
 
@@ -1444,8 +1444,8 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 		// Create a call to context setup
 		UK2Node_CallFunction* const CallSetupCaptureNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 		CallSetupCaptureNode->FunctionReference.SetExternalMember(
-			GET_MEMBER_NAME_CHECKED(UEnhancedAsyncActionContextLibrary, SetupContextContainer),
-			UEnhancedAsyncActionContextLibrary::StaticClass()
+			GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, SetupContextContainer),
+			UEnhancedAsyncContextLibrary::StaticClass()
 		);
 		CallSetupCaptureNode->AllocateDefaultPins();
 

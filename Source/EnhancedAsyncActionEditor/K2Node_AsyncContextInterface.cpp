@@ -1,8 +1,8 @@
 ﻿// Copyright 2025, Aquanox.
 
 #include "K2Node_AsyncContextInterface.h"
-#include "EnhancedAsyncActionShared.h"
-#include "EnhancedAsyncActionPrivate.h"
+#include "EnhancedAsyncContextShared.h"
+#include "EnhancedAsyncContextPrivate.h"
 #include "EdGraph/EdGraphPin.h"
 
 FEnhancedAsyncTaskCapture::FEnhancedAsyncTaskCapture(int32 InIndex, UEdGraphPin* Input, UEdGraphPin* Output)

@@ -1,4 +1,6 @@
-﻿#include "EnhancedAsyncActionCustomSettings.h"
+﻿// Copyright 2025, Aquanox.
+
+#include "EnhancedAsyncContextCustomSettings.h"
 
 #include "EdGraphSchema_K2.h"
 #include "IDetailChildrenBuilder.h"
@@ -112,59 +114,3 @@ bool FExternalAsyncActionSpecCustomization::IsValidClass() const
 	UObject* ClassValue = nullptr;
 	return ClassHandle->GetValue(ClassValue) == FPropertyAccess::Success && ClassValue != nullptr;
 }
-
-void FExternalLatentFunctionSpecCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> PropertyHandle, IDetailChildrenBuilder& ChildBuilder, IPropertyTypeCustomizationUtils& CustomizationUtils)
-{
-	ClassHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FExternalLatentFunctionSpec, FactoryClass)).ToSharedRef();
-	ClassHandle->SetOnPropertyValueChanged(FSimpleDelegate::CreateSP(this, &ThisClass::OnClassChanged));
-
-	FunctionHandle = PropertyHandle->GetChildHandle(GET_MEMBER_NAME_CHECKED(FExternalLatentFunctionSpec, FunctionName)).ToSharedRef();
-
-	ChildBuilder.AddProperty(ClassHandle.ToSharedRef());
-
-	ChildBuilder.AddProperty(FunctionHandle.ToSharedRef())
-		.CustomWidget()
-		.NameContent()
-		[
-			FunctionHandle->CreatePropertyNameWidget()
-		]
-		.ValueContent()
-		.MaxDesiredWidth(500.0f)
-		.MinDesiredWidth(100.0f)
-		[
-			PropertyCustomizationHelpers::MakePropertyComboBox(FunctionHandle, FOnGetPropertyComboBoxStrings::CreateSP(this, &ThisClass::OnPopulateFunctionCombo))
-		];
-}
-
-void FExternalLatentFunctionSpecCustomization::OnClassChanged()
-{
-	FunctionHandle->SetValueFromFormattedString(TEXT(""));
-}
-
-void FExternalLatentFunctionSpecCustomization::OnPopulateFunctionCombo(TArray<TSharedPtr<FString>>& OutComboBoxStrings, TArray<TSharedPtr<SToolTip>>& OutToolTips, TArray<bool>& OutRestrictedItems) const
-{
-	OutComboBoxStrings.Add(MakeShared<FString>(TEXT("None")));
-	OutToolTips.Add(nullptr);
-	OutRestrictedItems.Add(false);
-
-	UObject* ClassValue = nullptr;
-	if ( ClassHandle->GetValue(ClassValue) == FPropertyAccess::Success && ClassValue && Cast<UClass>(ClassValue)->IsChildOf(UBlueprintAsyncActionBase::StaticClass()))
-	{
-		for (TFieldIterator<UFunction> MemberIt( Cast<UClass>(ClassValue) ); MemberIt; ++MemberIt)
-		{
-			if (MemberIt->FindMetaData(FBlueprintMetadata::MD_Latent) != nullptr)
-			{
-				OutComboBoxStrings.Add( MakeShared<FString>( MemberIt->GetName() ) );
-				OutToolTips.Add(nullptr);
-				OutRestrictedItems.Add(false);
-			}
-		}
-	}
-}
-
-bool FExternalLatentFunctionSpecCustomization::IsValidClass() const
-{
-	UObject* ClassValue = nullptr;
-	return ClassHandle->GetValue(ClassValue) == FPropertyAccess::Success && ClassValue != nullptr;
-}
-

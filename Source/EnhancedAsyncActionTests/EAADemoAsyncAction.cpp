@@ -3,7 +3,7 @@
 #include "EAADemoAsyncAction.h"
 
 #include "Async/Async.h"
-#include "EnhancedAsyncActionShared.h"
+#include "EnhancedAsyncContextShared.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Logging/StructuredLog.h"
@@ -18,6 +18,7 @@ UEAADemoAsyncActionCapture* UEAADemoAsyncActionCapture::StartActionWithCapture(c
 	Proxy->PayloadMode = bDirectCall ? EEAAPayloadMode::DIRECT : EEAAPayloadMode::TIMER;
 	Proxy->LocalUserIndex = UserIndex;
 	Proxy->World = GEngine->GetWorldFromContextObject(WorldContextObject, EGetWorldErrorMode::Assert);
+	Proxy->RegisterWithGameInstance(Proxy->World);
 	return Proxy;
 }
 

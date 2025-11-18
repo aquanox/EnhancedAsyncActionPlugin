@@ -3,7 +3,7 @@
 #pragma once
 
 #include "Engine/DeveloperSettings.h"
-#include "EnhancedAsyncActionSettings.generated.h"
+#include "EnhancedAsyncContextSettings.generated.h"
 
 #define UE_API ENHANCEDASYNCACTION_API
 
@@ -28,35 +28,21 @@ struct FExternalAsyncActionSpec
 	bool bExposedContext = false;
 };
 
-USTRUCT()
-struct FExternalLatentFunctionSpec
-{
-	GENERATED_BODY()
-
-	// Async action class for registration
-	UPROPERTY(EditAnywhere, Category=Spec, meta=(AllowAbstract=true, HideViewOptions=true, DisplayThumbnail=false))
-	TSoftClassPtr<class UObject> FactoryClass;
-	// Name of function
-	UPROPERTY(EditAnywhere, Category=Spec)
-	FName FunctionName;
-};
-
 /**
  *
  */
 UCLASS(MinimalAPI, Config=Engine, DefaultConfig, DisplayName="Enhanced Async Actions")
-class UEnhancedAsyncActionSettings : public UDeveloperSettings
+class UEnhancedAsyncContextSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
 public:
-	UE_API static const UEnhancedAsyncActionSettings* Get();
+	UE_API static const UEnhancedAsyncContextSettings* Get();
 
-	UE_API virtual FName GetContainerName() const override { return TEXT("Editor"); }
-	UE_API virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-	UE_API virtual FName GetSectionName() const override { return TEXT("EnhancedAsyncAction"); }
+	virtual FName GetContainerName() const override { return TEXT("Editor"); }
+	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
+	virtual FName GetSectionName() const override { return TEXT("EnhancedAsyncAction"); }
 
 	UE_API const FExternalAsyncActionSpec* FindActionSpecForClass(UClass* Class) const;
-	UE_API const FExternalLatentFunctionSpec* FindLatentSpecForFunction(const UFunction* Function) const;
 
 private:
 	/**
@@ -69,15 +55,6 @@ private:
 	UPROPERTY(Config, EditAnywhere, Category=General, meta=(ConfigRestartRequired=true))
 	TArray<FExternalAsyncActionSpec> ExternalAsyncActions;
 
-	/**
-	 * List of manually registered latent functions to use EnhancedCallLatentFunction node.
-	 *
-	 * This option forces registration of functions that do not have `HasLatentContext` metadata specifier but compatible with plugin
-	 *
-	 * IMPORTANT: Use this setting only if you have a class you can not modify to add plugin metadata.
-	 */
-	UPROPERTY(Config, EditAnywhere, Category=General, meta=(ConfigRestartRequired=true))
-	TArray<FExternalLatentFunctionSpec> ExternalLatentFunctions;
 };
 
 #undef UE_API

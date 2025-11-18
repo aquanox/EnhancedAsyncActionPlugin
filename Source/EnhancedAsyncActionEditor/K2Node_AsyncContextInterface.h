@@ -8,6 +8,9 @@
 
 #define UE_API ENHANCEDASYNCACTIONEDITOR_API
 
+/**
+ * Represents pair of capture pins at specific index.
+ */
 USTRUCT()
 struct FEnhancedAsyncTaskCapture
 {
@@ -73,6 +76,10 @@ public:
 	 * Get capture data container for modification
 	 */
 	virtual TArray<FEnhancedAsyncTaskCapture>& GetMutableCapturesArray() = 0;
+
+	//int32 IndexOfCapturePin(const UEdGraphPin* Pin) const;
+
+	//bool IsCapturePin(const UEdGraphPin* Pin) const;
 };
 
 #undef UE_API
