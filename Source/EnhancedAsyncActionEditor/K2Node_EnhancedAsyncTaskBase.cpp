@@ -21,7 +21,6 @@
 #include "EnhancedAsyncContextSettings.h"
 #include "K2Node_CallArrayFunction.h"
 #include "K2Node_MakeArray.h"
-#include "StructUtils/PropertyBag.h"
 #include "ToolMenu.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(K2Node_EnhancedAsyncTaskBase)
@@ -34,94 +33,32 @@ UK2Node_EnhancedAsyncTaskBase::UK2Node_EnhancedAsyncTaskBase()
 
 void UK2Node_EnhancedAsyncTaskBase::GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const
 {
-	// Super::GetMenuActions(ActionRegistrar);
 }
 
 void UK2Node_EnhancedAsyncTaskBase::GetNodeContextMenuActions(UToolMenu* Menu, UGraphNodeContextMenuContext* Context) const
 {
+	static const FName NodeSection = FName("AsyncContextNode");
+	static const FText NodeSectionDesc = LOCTEXT("AsyncContextNode", "Async Context Node");
+
 	Super::GetNodeContextMenuActions(Menu, Context);
 
-	static const FName NodeSection = FName("EnhancedAsyncTaskBase");
-	static const FText NodeSectionDesc = LOCTEXT("EnhancedAsyncTaskBase", "Task Node");
+	ThisClass* const MutableThis = const_cast<ThisClass*>(this);
 
-	auto* MutableThis = const_cast<UK2Node_EnhancedAsyncTaskBase*>(this);
-	auto* MutablePin = const_cast<UEdGraphPin*>(Context->Pin);
+	FK2Node_AsyncContextMenuActions::SetupActions(MutableThis, Menu, Context);
 
-	if (CanRemovePin(Context->Pin))
-	{
-		FToolMenuSection& Section = Menu->FindOrAddSection(NodeSection, NodeSectionDesc);
-		Section.AddMenuEntry(
-			"RemovePin",
-			LOCTEXT("RemovePin", "Remove capture pin"),
-			LOCTEXT("RemovePinTooltip", "Remove selected capture pin"),
-			FSlateIcon(),
-			FUIAction(
-				FExecuteAction::CreateUObject(MutableThis, &ThisClass::RemoveInputPin, MutablePin)
-			)
-		);
-	}
-	else if (CanAddPin())
-	{
-		FToolMenuSection& Section = Menu->FindOrAddSection(NodeSection, NodeSectionDesc);
-		Section.AddMenuEntry(
-			"AddPin",
-			LOCTEXT("AddPin", "Add capture pin"),
-			LOCTEXT("AddPinTooltip", "Add capture pin pair"),
-			FSlateIcon(),
-			FUIAction(
-				FExecuteAction::CreateUObject(MutableThis, &ThisClass::AddInputPin)
-			)
-		);
-	}
-	if (!Context->Pin && GetNumCaptures() > 0)
-	{
-		FToolMenuSection& Section = Menu->FindOrAddSection(NodeSection, NodeSectionDesc);
-		Section.AddMenuEntry(
-			"UnlinkAllCapture",
-			LOCTEXT("UnlinkAllCapture", "Unlink all capture pins"),
-			LOCTEXT("UnlinkAllCaptureTooltip", "Unlink all capture pins"),
-			FSlateIcon(),
-			FUIAction(
-				FExecuteAction::CreateUObject(MutableThis, &ThisClass::UnlinkAllCapturePins)
-			)
-		);
-		Section.AddMenuEntry(
-			"RemoveAllCapture",
-			LOCTEXT("RemoveAllCapture", "Remove all capture pins"),
-			LOCTEXT("RemoveAllCaptureTooltip", "Remove all capture pins"),
-			FSlateIcon(),
-			FUIAction(
-				FExecuteAction::CreateUObject(MutableThis, &ThisClass::RemoveAllCapturePins)
-			)
-		);
-		Section.AddMenuEntry(
-			"RemoveUnusedCapture",
-			LOCTEXT("RemoveUnusedCapture", "Remove unused capture pins"),
-			LOCTEXT("RemoveUnusedCaptureTooltip", "unused unlinked capture pins"),
-			FSlateIcon(),
-			FUIAction(
-			FExecuteAction::CreateUObject(MutableThis, &ThisClass::RemoveUnusedCapturePins)
-			)
-		);
-	}
 	if (!Context->Pin)
 	{
 		FToolMenuSection& Section = Menu->FindOrAddSection(NodeSection, NodeSectionDesc);
 		Section.AddMenuEntry(
 			"ContextToggle",
-			MakeAttributeUObject(const_cast<ThisClass*>(this), &ThisClass::ToggleContextPinStateLabel),
+			MakeAttributeUObject(MutableThis, &ThisClass::ToggleContextPinStateLabel),
 			LOCTEXT("ContextToggleTooltip", "Toggle context pin visibility"),
 			FSlateIcon(),
 			FUIAction(
-				FExecuteAction::CreateUObject(const_cast<ThisClass*>(this), &ThisClass::ToggleContextPinState)
+				FExecuteAction::CreateUObject(MutableThis, &ThisClass::ToggleContextPinState)
 			)
 		);
 	}
-}
-
-bool UK2Node_EnhancedAsyncTaskBase::HasExternalDependencies(TArray<UStruct*>* OptionalOutput) const
-{
-	return Super::HasExternalDependencies(OptionalOutput);
 }
 
 FText UK2Node_EnhancedAsyncTaskBase::GetTooltipText() const
@@ -190,8 +127,6 @@ void UK2Node_EnhancedAsyncTaskBase::ImportConfigFromSpec(UClass* InClass, const 
 
 void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultPins()
 {
-	UE_LOG(LogEnhancedAction, Log, TEXT("%p:AllocateDefaultPins"), this);
-
 	Super::AllocateDefaultPins();
 
 	// Optionally hide the async context pin if requested
@@ -202,19 +137,7 @@ void UK2Node_EnhancedAsyncTaskBase::AllocateDefaultPins()
 
 	for (int32 Index = 0; Index < NumCaptures; ++Index)
 	{
-		UEdGraphPin* In = CreatePin(EEdGraphPinDirection::EGPD_Input,
-		                            UEdGraphSchema_K2::PC_Wildcard,
-		                            GetCapturePinName(Index, EEdGraphPinDirection::EGPD_Input)
-		);
-		In->SourceIndex = Index;
-		In->bDefaultValueIsIgnored = true;
-		UEdGraphPin* Out = CreatePin(EEdGraphPinDirection::EGPD_Output,
-		                             UEdGraphSchema_K2::PC_Wildcard,
-		                             GetCapturePinName(Index, EEdGraphPinDirection::EGPD_Output)
-		);
-		Out->SourceIndex = Index;
-
-		Captures.Add(FEnhancedAsyncTaskCapture(Index, In, Out));
+		AddCaptureInternal();
 	}
 }
 
@@ -233,36 +156,9 @@ int32 UK2Node_EnhancedAsyncTaskBase::GetNumCaptures() const
 	return Captures.Num();
 }
 
-bool UK2Node_EnhancedAsyncTaskBase::AnyCapturePinHasLinks() const
-{
-	bool bHasLinks = false;
-	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
-	{
-		if (InPin->LinkedTo.Num() || OutPin->LinkedTo.Num())
-		{
-			bHasLinks = true;
-			return false;
-		}
-		return true;
-	});
-	return bHasLinks;
-}
-
 bool UK2Node_EnhancedAsyncTaskBase::HasContextExposed() const
 {
 	return bExposeContextParameter;
-}
-
-void UK2Node_EnhancedAsyncTaskBase::GetStandardPins(EEdGraphPinDirection Dir, TArray<UEdGraphPin*> &OutPins) const
-{
-	OutPins.Reserve(Pins.Num());
-	for (UEdGraphPin* const Pin : Pins)
-	{
-		if (Pin->Direction == Dir && !IsCapturePin(Pin))
-		{
-			OutPins.Add(Pin);
-		}
-	}
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::IsContextPin(const UEdGraphPin* Pin) const
@@ -279,285 +175,11 @@ bool UK2Node_EnhancedAsyncTaskBase::CanSplitPin(const UEdGraphPin* Pin) const
 
 bool UK2Node_EnhancedAsyncTaskBase::IsConnectionDisallowed(const UEdGraphPin* MyPin, const UEdGraphPin* OtherPin, FString& OutReason) const
 {
-	if (IsCapturePin(MyPin) && OtherPin)
+	if (!TestConnectPins(MyPin, OtherPin, OutReason))
 	{
-		if (OtherPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Exec
-		 || OtherPin->PinType.PinCategory == UEdGraphSchema_K2::PC_Delegate)
-		{
-			OutReason = FString::Printf(TEXT("Can not capture pin"));
-			return true;
-		}
-		if (OtherPin->PinType.PinCategory != UEdGraphSchema_K2::PC_Wildcard)
-		{
-			if (!EAA::Internals::IsCapturableType(OtherPin->PinType))
-			{
-				OutReason = FString::Printf(TEXT("Can not capture pin of type %s"), *OtherPin->PinType.PinCategory.ToString());
-				return true;
-			}
-		}
+		return true;
 	}
 	return Super::IsConnectionDisallowed(MyPin, OtherPin, OutReason);
-}
-
-void UK2Node_EnhancedAsyncTaskBase::SyncPinIndexesAndNames()
-{
-	auto SyncPin = [this](FEnhancedAsyncTaskCapture& Info, UEdGraphPin* CurrentPin, int32 CurrentIndex)
-	{
-		check(CurrentPin);
-
-		const FName OldName = CurrentPin->PinName;
-		const FName ElementName = GetCapturePinName(CurrentIndex, CurrentPin->Direction);
-
-		CurrentPin->Modify();
-		CurrentPin->PinName = ElementName;
-		CurrentPin->SourceIndex = CurrentIndex;
-
-		Info.NameOf(CurrentPin->Direction) = ElementName;
-	};
-
-	for (int32 Index = 0; Index < Captures.Num(); ++Index)
-	{
-		FEnhancedAsyncTaskCapture& CaptureInfo = Captures[Index];
-		const int32 OldIndex = CaptureInfo.Index;
-
-		CaptureInfo.Index = Index;
-		if (UEdGraphPin* InPin = FindPinChecked(CaptureInfo.InputPinName, EGPD_Input))
-			SyncPin(CaptureInfo, InPin, Index);
-
-		if (UEdGraphPin* OutPin = FindPinChecked(CaptureInfo.OutputPinName, EGPD_Output))
-			SyncPin(CaptureInfo, OutPin, Index);
-	}
-}
-
-void UK2Node_EnhancedAsyncTaskBase::SyncCapturePinTypes()
-{
-	ForEachCapturePinPair([this](int32 Index, UEdGraphPin* In, UEdGraphPin* Out)
-	{
-		SynchronizeCapturePinType(In, Out);
-		return true;
-	});
-}
-
-int32 UK2Node_EnhancedAsyncTaskBase::IndexOfCapturePin(const UEdGraphPin* Pin) const
-{
-	if (Pin->SourceIndex == INDEX_NONE)
-		return false;
-	return Captures.IndexOfByPredicate([&Pin](const FEnhancedAsyncTaskCapture& Capture)
-	{
-		return Capture.NameOf(Pin->Direction) == Pin->PinName;
-	});
-}
-
-UEdGraphPin* UK2Node_EnhancedAsyncTaskBase::FindCapturePin(int32 PinIndex, EEdGraphPinDirection Dir) const
-{
-	ensure(Captures.IsValidIndex(PinIndex));
-	const FName CapturePinName = GetCapturePinName(PinIndex, Dir);
-	ensure(Captures[PinIndex].NameOf(Dir) == CapturePinName);
-	return FindPin(CapturePinName, Dir);
-}
-
-UEdGraphPin* UK2Node_EnhancedAsyncTaskBase::FindCapturePinChecked(int32 PinIndex, EEdGraphPinDirection Dir) const
-{
-	ensure(Captures.IsValidIndex(PinIndex));
-	const FName CapturePinName = GetCapturePinName(PinIndex, Dir);
-	ensure(Captures[PinIndex].NameOf(Dir) == CapturePinName);
-	return FindPinChecked(CapturePinName, Dir);
-}
-
-void UK2Node_EnhancedAsyncTaskBase::ForEachCapturePin(EEdGraphPinDirection Dir, TFunction<bool(int32, UEdGraphPin*)> const& Func) const
-{
-	for (int32 Index = 0; Index < Captures.Num(); ++Index)
-	{
-		const FEnhancedAsyncTaskCapture& CaptureInfo = Captures[Index];
-
-		UEdGraphPin* Pin = FindPin(CaptureInfo.NameOf(Dir), Dir);
-		ensureAlways(Pin && Pin->SourceIndex == CaptureInfo.Index);
-		if (!Func(CaptureInfo.Index, Pin))
-		{
-			break;
-		}
-	}
-}
-
-void UK2Node_EnhancedAsyncTaskBase::ForEachCapturePinPair(TFunction<bool(int32, UEdGraphPin*, UEdGraphPin*)> const& Func) const
-{
-	for (int32 Index = 0; Index < Captures.Num(); ++Index)
-	{
-		const FEnhancedAsyncTaskCapture& CaptureInfo = Captures[Index];
-
-		UEdGraphPin* InPin = FindPin(CaptureInfo.InputPinName, EGPD_Input);
-		ensureAlways(InPin && InPin->SourceIndex == CaptureInfo.Index);
-		UEdGraphPin* OutPin = FindPin(CaptureInfo.OutputPinName, EGPD_Output);
-		ensureAlways(OutPin && OutPin->SourceIndex == CaptureInfo.Index);
-		if (!Func(CaptureInfo.Index, InPin, OutPin))
-		{
-			break;
-		}
-	}
-}
-
-bool UK2Node_EnhancedAsyncTaskBase::IsCapturePin(const UEdGraphPin* Pin) const
-{
-	if (Pin->ParentPin != nullptr || Pin->bOrphanedPin || Pin->SourceIndex == INDEX_NONE)
-		return false;
-	return IndexOfCapturePin(Pin) != INDEX_NONE;
-}
-
-bool UK2Node_EnhancedAsyncTaskBase::CanAddPin() const
-{
-	return GetNumCaptures() < GetMaxCapturePins();
-}
-
-void UK2Node_EnhancedAsyncTaskBase::AddInputPin()
-{
-	FScopedTransaction Transaction(LOCTEXT("AddPinTx", "AddPin"));
-	Modify();
-
-	const int32 Index = GetNumCaptures();
-
-	UEdGraphPin* In = CreatePin(EEdGraphPinDirection::EGPD_Input,
-	                            UEdGraphSchema_K2::PC_Wildcard,
-	                            GetCapturePinName(Index, EEdGraphPinDirection::EGPD_Input)
-	);
-	In->SourceIndex = Index;
-	In->bDefaultValueIsIgnored = true;
-	UEdGraphPin* Out = CreatePin(EEdGraphPinDirection::EGPD_Output,
-	                             UEdGraphSchema_K2::PC_Wildcard,
-	                             GetCapturePinName(Index, EEdGraphPinDirection::EGPD_Output)
-	);
-	Out->SourceIndex = Index;
-
-	Captures.Add(FEnhancedAsyncTaskCapture(Index, In, Out));
-
-	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
-}
-
-bool UK2Node_EnhancedAsyncTaskBase::CanRemovePin(const UEdGraphPin* Pin) const
-{
-	return Pin && IsCapturePin(Pin);
-}
-
-void UK2Node_EnhancedAsyncTaskBase::RemoveInputPin(UEdGraphPin* Pin)
-{
-	check(Pin->ParentPin == nullptr);
-
-	const int32 CaptureIndex = IndexOfCapturePin(Pin);
-	if (CaptureIndex == INDEX_NONE)
-	{
-		return;
-	}
-
-	FScopedTransaction Transaction(LOCTEXT("RemovePinTx", "RemovePin"));
-	Modify();
-
-	RemoveCaptureAtIndex(CaptureIndex);
-
-	SyncPinIndexesAndNames();
-
-	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
-}
-
-void UK2Node_EnhancedAsyncTaskBase::RemoveCaptureAtIndex(int32 ArrayIndex)
-{
-	check(Captures.IsValidIndex(ArrayIndex));
-
-	TFunction<void(UEdGraphPin*)> RemovePinLambda = [this, &RemovePinLambda](UEdGraphPin* PinToRemove)
-	{
-		for (int32 SubPinIndex = PinToRemove->SubPins.Num() - 1; SubPinIndex >= 0; --SubPinIndex)
-		{
-			RemovePinLambda(PinToRemove->SubPins[SubPinIndex]);
-		}
-
-		int32 PinRemovalIndex = INDEX_NONE;
-		if (Pins.Find(PinToRemove, PinRemovalIndex))
-		{
-			Pins.RemoveAt(PinRemovalIndex);
-			PinToRemove->MarkAsGarbage();
-		}
-	};
-
-	const FEnhancedAsyncTaskCapture CapureInfo = Captures[ArrayIndex];
-	Captures.RemoveAt(ArrayIndex);
-
-	if (UEdGraphPin* InPin = FindPin(CapureInfo.InputPinName, EEdGraphPinDirection::EGPD_Input))
-	{
-		InPin->BreakAllPinLinks(false);
-		RemovePinLambda(InPin);
-	}
-	if (UEdGraphPin* OutPin = FindPin(CapureInfo.OutputPinName, EEdGraphPinDirection::EGPD_Output))
-	{
-		OutPin->BreakAllPinLinks(false);
-		RemovePinLambda(OutPin);
-	}
-}
-
-void UK2Node_EnhancedAsyncTaskBase::UnlinkAllCapturePins()
-{
-	FScopedTransaction Transaction(LOCTEXT("UnlinkAllDynamicPinsTx", "UnlinkAllCapturePins"));
-	Modify();
-
-	ForEachCapturePinPair([](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
-	{
-		if (InPin)
-		{
-			InPin->BreakAllPinLinks(true);
-			InPin->PinType = EAA::Internals::GetWildcardType();
-		}
-		if (OutPin)
-		{
-			OutPin->BreakAllPinLinks(true);
-			OutPin->PinType = EAA::Internals::GetWildcardType();
-		}
-		return true;
-	});
-
-	GetGraph()->NotifyNodeChanged(this);
-
-	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
-}
-
-void UK2Node_EnhancedAsyncTaskBase::RemoveUnusedCapturePins()
-{
-	FScopedTransaction Transaction(LOCTEXT("RemoveUnusedCapturePinsTx", "RemoveUnusedCapturePins"));
-	Modify();
-
-	TArray<int32, TInlineAllocator<16>> IndexesToRemove;
-	ForEachCapturePinPair([&IndexesToRemove](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
-	{
-		if (InPin->LinkedTo.Num() == 0 && OutPin->LinkedTo.Num() == 0)
-		{
-			IndexesToRemove.Add(Index);
-		}
-		return true;
-	});
-
-	for (int Index = IndexesToRemove.Num() - 1; Index >= 0; --Index)
-	{
-		RemoveCaptureAtIndex(IndexesToRemove[Index]);
-	}
-
-	SyncPinIndexesAndNames();
-
-	GetGraph()->NotifyNodeChanged(this);
-
-	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
-}
-
-void UK2Node_EnhancedAsyncTaskBase::RemoveAllCapturePins()
-{
-	FScopedTransaction Transaction(LOCTEXT("RemoveAllCapturePinsTx", "RemoveAllCapturePins"));
-	Modify();
-
-	for (int Index = GetNumCaptures() - 1; Index >= 0; --Index)
-	{
-		RemoveCaptureAtIndex(Index);
-	}
-
-	check(Captures.IsEmpty());
-
-	GetGraph()->NotifyNodeChanged(this);
-
-	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
 }
 
 FText UK2Node_EnhancedAsyncTaskBase::ToggleContextPinStateLabel() const
@@ -636,83 +258,6 @@ void UK2Node_EnhancedAsyncTaskBase::PostReconstructNode()
 			SyncCapturePinTypes();
 		}
 	}
-}
-
-void UK2Node_EnhancedAsyncTaskBase::SynchronizeCapturePinType(UEdGraphPin* Pin)
-{
-	int32 CaptureIndex = IndexOfCapturePin(Pin);
-	check(CaptureIndex != INDEX_NONE);
-
-	UEdGraphPin* InputPin = FindCapturePinChecked(CaptureIndex, EGPD_Input);
-	UEdGraphPin* OutputPin = FindCapturePinChecked(CaptureIndex, EGPD_Output);
-
-	SynchronizeCapturePinType(InputPin, OutputPin);
-}
-
-void UK2Node_EnhancedAsyncTaskBase::SynchronizeCapturePinType(UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
-{
-	check(InputPin && OutputPin);
-
-	const UEdGraphSchema_K2* Schema = Cast<const UEdGraphSchema_K2>(GetSchema());
-
-	FEdGraphPinType NewType = DeterminePinType(InputPin, OutputPin);
-
-	bool bPinTypeChanged = false;
-	auto ApplyPinType = [&bPinTypeChanged](UEdGraphPin* LocalPin, const FEdGraphPinType& Type)
-	{
-		if (LocalPin->PinType != Type)
-		{
-			LocalPin->PinType = Type;
-			bPinTypeChanged = true;
-		}
-	};
-	ApplyPinType(InputPin, NewType);
-	ApplyPinType(OutputPin, NewType);
-
-	UE_LOG(LogEnhancedAction, Verbose, TEXT("SyncType %s => %s"), *EAA::Internals::ToDebugString(InputPin), *EAA::Internals::ToDebugString(NewType))
-	UE_LOG(LogEnhancedAction, Verbose, TEXT("SyncType %s => %s"), *EAA::Internals::ToDebugString(OutputPin), *EAA::Internals::ToDebugString(NewType))
-
-	if (bPinTypeChanged)
-	{
-		InputPin->Modify();
-		OutputPin->Modify();
-
-		// Let the graph know to refresh
-		GetGraph()->NotifyNodeChanged(this);
-
-		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(GetBlueprint());
-	}
-}
-
-FEdGraphPinType UK2Node_EnhancedAsyncTaskBase::DeterminePinType(const UEdGraphPin* InputPin, const UEdGraphPin* OutputPin)
-{
-	auto ExpectedPinType = [](const UEdGraphPin* LocalPin) -> FEdGraphPinType
-	{
-		if (LocalPin->LinkedTo.Num() == 0)
-		{
-			return EAA::Internals::GetWildcardType();
-		}
-		else
-		{
-			const UEdGraphPin* ArgumentSourcePin = LocalPin->LinkedTo[0];
-			return ArgumentSourcePin->PinType;
-		}
-	};
-
-	auto InputType = ExpectedPinType(InputPin);
-	auto OutputType = ExpectedPinType(OutputPin);
-
-	FEdGraphPinType NewType = InputType;
-	if (InputType != OutputType)
-	{
-		if (EAA::Internals::IsWildcardType(InputType) && !EAA::Internals::IsWildcardType(OutputType))
-			NewType = OutputType;
-		else if (!EAA::Internals::IsWildcardType(InputType) && EAA::Internals::IsWildcardType(OutputType))
-			NewType = InputType;
-		else
-			NewType = InputType;
-	}
-	return NewType;
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::ValidateDelegates(
@@ -1270,7 +815,7 @@ FString UK2Node_EnhancedAsyncTaskBase::BuildContextConfigString() const
 
 	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
 	{
-		auto DetectedPinType = DeterminePinType(InPin, OutPin);
+		auto DetectedPinType = EAA::Internals::DeterminePinType(InPin, OutPin);
 
 		if (BuilderBase.Len())
 			BuilderBase.Append(TEXT(";"));
@@ -1525,4 +1070,4 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	BreakAllNodeLinks();
 }
 
-#undef LOCTE
+#undef LOCTEXT_NAMESPACE

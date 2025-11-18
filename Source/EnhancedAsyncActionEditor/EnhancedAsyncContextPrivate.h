@@ -39,6 +39,14 @@ namespace EAA::Internals
 	bool IsCapturableType(const FEdGraphPinType& Type);
 
 	/**
+	 * Determine common pin type for capture pair
+	 *
+	 * @param InputPin
+	 * @param OutputPin
+	 */
+	FEdGraphPinType DeterminePinType(const UEdGraphPin* InputPin, const UEdGraphPin* OutputPin);
+
+	/**
 	 * Identify property type for the pin
 	 * @param Pin
 	 * @return if identification was successful

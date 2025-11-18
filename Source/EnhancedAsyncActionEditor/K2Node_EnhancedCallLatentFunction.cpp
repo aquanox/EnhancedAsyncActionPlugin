@@ -8,6 +8,8 @@
 #include "BlueprintNodeSpawner.h"
 #include "EnhancedLatentActionHandle.h"
 
+#define LOCTEXT_NAMESPACE "UK2Node_EnhancedCallLatentFunction"
+
 void UK2Node_EnhancedCallLatentFunction::GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const
 {
 	UClass* NodeClass = GetClass();
@@ -70,14 +72,18 @@ void UK2Node_EnhancedCallLatentFunction::GetMenuActions(FBlueprintActionDatabase
 
 void UK2Node_EnhancedCallLatentFunction::GetNodeContextMenuActions(class UToolMenu* Menu, class UGraphNodeContextMenuContext* Context) const
 {
+	static const FName NodeSection = FName("LatentContextNode");
+	static const FText NodeSectionDesc = LOCTEXT("LatentContextNode", "Async Context Node");
+
 	Super::GetNodeContextMenuActions(Menu, Context);
+
+	ThisClass* const MutableThis = const_cast<ThisClass*>(this);
+
+	FK2Node_AsyncContextMenuActions::SetupActions(MutableThis, Menu, Context);
+
 }
 
 void UK2Node_EnhancedCallLatentFunction::SetupFromFunction(const UFunction* Function)
-{
-}
-
-void UK2Node_EnhancedCallLatentFunction::SetupFromSpec(const FExternalLatentFunctionSpec& Spec)
 {
 }
 
@@ -106,26 +112,58 @@ TArray<FEnhancedAsyncTaskCapture>& UK2Node_EnhancedCallLatentFunction::GetMutabl
 	return Captures;
 }
 
-bool UK2Node_EnhancedCallLatentFunction::CanAddPin() const
+bool UK2Node_EnhancedCallLatentFunction::CanSplitPin(const UEdGraphPin* Pin) const
 {
-	return GetNumCaptures() < GetMaxCapturePins();
+	return Super::CanSplitPin(Pin) && !IsCapturePin(Pin);
 }
 
-void UK2Node_EnhancedCallLatentFunction::AddInputPin()
+bool UK2Node_EnhancedCallLatentFunction::IsConnectionDisallowed(const UEdGraphPin* MyPin, const UEdGraphPin* OtherPin, FString& OutReason) const
 {
+	if (!TestConnectPins(MyPin, OtherPin, OutReason))
+	{
+		return true;
+	}
+	return Super::IsConnectionDisallowed(MyPin, OtherPin, OutReason);
 }
 
-bool UK2Node_EnhancedCallLatentFunction::CanRemovePin(const UEdGraphPin* Pin) const
+void UK2Node_EnhancedCallLatentFunction::PinConnectionListChanged(UEdGraphPin* Pin)
 {
-	return Pin ; //&& IsCapturePin(Pin);
+	Modify();
+
+	Super::PinConnectionListChanged(Pin);
+
+	if (IsCapturePin(Pin) && !Pin->IsPendingKill())
+	{
+		SynchronizeCapturePinType(Pin);
+	}
 }
 
-void UK2Node_EnhancedCallLatentFunction::RemoveInputPin(UEdGraphPin* Pin)
+void UK2Node_EnhancedCallLatentFunction::PinTypeChanged(UEdGraphPin* Pin)
 {
-	IK2Node_AddPinInterface::RemoveInputPin(Pin);
+	if (IsCapturePin(Pin) && !Pin->IsPendingKill())
+	{
+		SynchronizeCapturePinType(Pin);
+	}
+	Super::PinTypeChanged(Pin);
+}
+
+void UK2Node_EnhancedCallLatentFunction::PostReconstructNode()
+{
+	Super::PostReconstructNode();
+
+	if (!IsTemplate())
+	{
+		UEdGraph* OuterGraph = GetGraph();
+		if (OuterGraph && OuterGraph->Schema)
+		{
+			SyncCapturePinTypes();
+		}
+	}
 }
 
 void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
 	Super::ExpandNode(CompilerContext, SourceGraph);
 }
+
+#undef LOCTEXT_NAMESPACE

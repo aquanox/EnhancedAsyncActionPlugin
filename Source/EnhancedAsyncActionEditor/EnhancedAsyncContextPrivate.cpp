@@ -262,3 +262,35 @@ bool EAA::Internals::SelectAccessorForType(const FEdGraphPinType& PinType, EAcce
 	FPropertyTypeInfo TypeInfo = IdentifyPropertyTypeForPin(PinType);
 	return SelectAccessorForType(TypeInfo, AccessType, OutFunction);
 }
+
+FEdGraphPinType EAA::Internals::DeterminePinType(const UEdGraphPin* InputPin, const UEdGraphPin* OutputPin)
+{
+	auto ExpectedPinType = [](const UEdGraphPin* LocalPin) -> FEdGraphPinType
+	{
+		if (LocalPin->LinkedTo.Num() == 0)
+		{
+			return EAA::Internals::GetWildcardType();
+		}
+		else
+		{
+			const UEdGraphPin* ArgumentSourcePin = LocalPin->LinkedTo[0];
+			return ArgumentSourcePin->PinType;
+		}
+	};
+
+	auto InputType = ExpectedPinType(InputPin);
+	auto OutputType = ExpectedPinType(OutputPin);
+
+	FEdGraphPinType NewType = InputType;
+	if (InputType != OutputType)
+	{
+		if (EAA::Internals::IsWildcardType(InputType) && !EAA::Internals::IsWildcardType(OutputType))
+			NewType = OutputType;
+		else if (!EAA::Internals::IsWildcardType(InputType) && EAA::Internals::IsWildcardType(OutputType))
+			NewType = InputType;
+		else
+			NewType = InputType;
+	}
+	return NewType;
+}
+

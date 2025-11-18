@@ -14,7 +14,7 @@
  * WIP K2Node_CallFunction for Latents with Async Context
  */
 UCLASS(MinimalAPI)
-class UK2Node_EnhancedCallLatentFunction : public UK2Node_CallFunction, public IK2Node_AddPinInterface, public IK2Node_AsyncContextInterface
+class UK2Node_EnhancedCallLatentFunction : public UK2Node_CallFunction, public IK2Node_AsyncContextInterface
 {
 	GENERATED_BODY()
 public:
@@ -23,18 +23,17 @@ public:
 	virtual void GetNodeContextMenuActions(class UToolMenu* Menu, class UGraphNodeContextMenuContext* Context) const override;
 
 	void SetupFromFunction(const UFunction* Function);
-	void SetupFromSpec(const struct FExternalLatentFunctionSpec& Spec);
-
-	virtual void AllocateDefaultPins() override;
 
 	virtual int32 GetNumCaptures() const override;
 	virtual const TArray<FEnhancedAsyncTaskCapture>& GetCapturesArray() const override;
 	virtual TArray<FEnhancedAsyncTaskCapture>& GetMutableCapturesArray() override;
 
-	virtual bool CanAddPin() const override;
-	virtual void AddInputPin() override;
-	virtual bool CanRemovePin(const UEdGraphPin* Pin) const override;
-	virtual void RemoveInputPin(UEdGraphPin* Pin) override;
+	virtual void AllocateDefaultPins() override;
+	virtual bool CanSplitPin(const UEdGraphPin* Pin) const override;
+	virtual bool IsConnectionDisallowed(const UEdGraphPin* MyPin, const UEdGraphPin* OtherPin, FString& OutReason) const override;
+	virtual void PinConnectionListChanged(UEdGraphPin* Pin) override;
+	virtual void PinTypeChanged(UEdGraphPin* Pin) override;
+	virtual void PostReconstructNode() override;
 
 	virtual void ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph) override;
 
