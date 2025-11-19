@@ -12,6 +12,7 @@
 FEnhancedAsyncContextManager::FEnhancedAsyncContextManager()
 	: DummyContext(MakeShared<FEnhancedAsyncActionContextStub>())
 {
+	FCoreDelegates::OnExit.AddRaw(this, &FEnhancedAsyncContextManager::OnShutdown);
 }
 
 FEnhancedAsyncContextManager::~FEnhancedAsyncContextManager()
@@ -38,7 +39,7 @@ TValueOrError<FEnhancedAsyncActionContextHandle, FString> FEnhancedAsyncContextM
 
 	const FAsyncContextId Id = FAsyncContextId::Make(Action);
 
-	if (auto ExistingHandle = FindContextInternal(Id))
+	if (auto ExistingHandle = ActionContexts.FindRef(Id))
 	{
 		return MakeError(TEXT("Object already has bound context"));
 	}
@@ -73,57 +74,63 @@ TValueOrError<FEnhancedAsyncActionContextHandle, FString> FEnhancedAsyncContextM
 	return MakeValue(Result);
 }
 
-TValueOrError<FEnhancedLatentActionContextHandle, FString> FEnhancedAsyncContextManager::CreateContext(const FLatentCallResult& CallResult)
+TValueOrError<FEnhancedLatentActionContextHandle, FString> FEnhancedAsyncContextManager::CreateContext(const FLatentCallInfo& CallInfo)
 {
 	FScopeLock Lock(&MapCriticalSection);
 
-	if (!CallResult.IsValid())
+	if (!CallInfo.IsValid())
 	{
 		return MakeError(TEXT("Invalid latent info"));
 	}
 
-	const FAsyncContextId Id = FAsyncContextId::Make(CallResult);
+	const FAsyncContextId Id = FAsyncContextId::Make(CallInfo);
 
-	if (TSharedPtr<FEnhancedAsyncActionContext> ExistingHandle = FindContextInternal(Id))
+	if (TSharedPtr<FEnhancedAsyncActionContext> ExistingHandle = ActionContexts.FindRef(Id))
 	{
 		return MakeError(TEXT("Invalid action identifier"));
 	}
 
-	TSharedPtr<FEnhancedAsyncActionContext> Context;
-	if (CallResult.Container)
-	{
-		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBagRef>(CallResult.OwningObject.Get(), CallResult.Container, true);
-	}
-	else
-	{
-		Context = MakeShared<FEnhancedAsyncActionContext_PropertyBag>(CallResult.OwningObject.Get());
-	}
+	auto Context = MakeShared<FEnhancedAsyncActionContext_PropertyBag>(CallInfo.OwningObject.Get());
 
-	if (!Context.IsValid())
-	{
-		return MakeError(TEXT("Failed to select context backend implementation"));
-	}
+	SetContextInternal(Id, Context, CallInfo.OwningObject.Get());
 
-	SetContextInternal(Id, Context.ToSharedRef(), CallResult.OwningObject.Get());
-
-	const FEnhancedLatentActionContextHandle Result(Id, CallResult.OwningObject, Context.ToSharedRef());
+	const FEnhancedLatentActionContextHandle Result(Id, CallInfo, Context);
 
 	return MakeValue(Result);
 }
 
-void FEnhancedAsyncContextManager::DestroyContext(const struct FLatentCallResult& CallResult)
+TValueOrError<int32, FString> FEnhancedAsyncContextManager::DestroyContext(const FAsyncContextId& ContextId)
 {
 	FScopeLock Lock(&MapCriticalSection);
 
-	const FAsyncContextId Id = FAsyncContextId::Make(CallResult);
-	if (ActionContexts.Remove(Id) > 0)
+	if (TSharedPtr<FEnhancedAsyncActionContext> ContextObject = ActionContexts.FindRef(ContextId))
 	{
-		if (const UObject* Owner = CallResult.OwningObject.GetEvenIfUnreachable())
+		int32 Removed = ActionContexts.Remove(ContextId);
+
+		if (const UObject* Owner = ContextObject->GetOwningObject())
 		{
-			TrackedObjects.RemoveSingle(Owner, Id);
+			TrackedObjects.RemoveSingle(Owner, ContextId);
 		}
+
+		return MakeValue(Removed);
 	}
+
 	ObjectListener.UpdateState();
+	return MakeValue(0);
+}
+
+TValueOrError<int32, FString> FEnhancedAsyncContextManager::DestroyContext(const FEnhancedLatentActionContextHandle& Handle)
+{
+	FScopeLock Lock(&MapCriticalSection);
+
+	auto Value = DestroyContext(Handle.GetId());
+
+	if (const UObject* Owner = Handle.Owner.GetEvenIfUnreachable())
+	{
+		TrackedObjects.RemoveSingle(Owner, Handle.GetId());
+	}
+
+	return Value;
 }
 
 void FEnhancedAsyncContextManager::SetContextInternal(FAsyncContextId ContextId, TSharedRef<FEnhancedAsyncActionContext> Context, const UObject* TrackedOwner)
@@ -149,88 +156,90 @@ void FEnhancedAsyncContextManager::SetContextInternal(FAsyncContextId ContextId,
 	ObjectListener.UpdateState();
 }
 
-TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::FindContextInternal(const FAsyncContextId& ContextId)
+FEnhancedAsyncActionContextHandle FEnhancedAsyncContextManager::FindContextHandle(const UObject* Action)
 {
 	FScopeLock Lock(&MapCriticalSection);
 
-	return ActionContexts.FindRef(ContextId);
-}
-
-TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::FindContext(FAsyncContextId ContextId, bool bAllowNull)
-{
-	if (TSharedPtr<FEnhancedAsyncActionContext> ContextObject = FindContextInternal(ContextId))
-	{
-		return ContextObject;
-	}
-	return bAllowNull ? TSharedPtr<FEnhancedAsyncActionContext>() : DummyContext;
-}
-
-FEnhancedAsyncActionContextHandle FEnhancedAsyncContextManager::FindContextHandle(const UObject* Action)
-{
 	const FAsyncContextId Id = FAsyncContextId::Make(Action);
-	if (TSharedPtr<FEnhancedAsyncActionContext> ContextObject = FindContextInternal(Id))
+	if (TSharedPtr<FEnhancedAsyncActionContext> ContextObject = ActionContexts.FindRef(Id))
 	{
 		return FEnhancedAsyncActionContextHandle( Id, Action, ContextObject.ToSharedRef() );
 	}
 	return FEnhancedAsyncActionContextHandle();
 }
 
-FEnhancedLatentActionContextHandle FEnhancedAsyncContextManager::FindContextHandle(const FLatentCallResult& CallResult)
+FEnhancedLatentActionContextHandle FEnhancedAsyncContextManager::FindContextHandle(const FLatentCallInfo& CallInfo)
 {
-	const FAsyncContextId Id = FAsyncContextId::Make(CallResult);
-	if (TSharedPtr<FEnhancedAsyncActionContext> ContextObject = FindContextInternal(Id))
+	FScopeLock Lock(&MapCriticalSection);
+
+	const FAsyncContextId Id = FAsyncContextId::Make(CallInfo);
+	if (TSharedPtr<FEnhancedAsyncActionContext> ContextObject = ActionContexts.FindRef(Id))
 	{
-		return FEnhancedLatentActionContextHandle( Id, CallResult.OwningObject, ContextObject.ToSharedRef()  );
+		return FEnhancedLatentActionContextHandle( Id, CallInfo, ContextObject.ToSharedRef()  );
 	}
 	return FEnhancedLatentActionContextHandle();
 }
 
-template<typename T>
-TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::ResolveContextHandleInternal(const T& Handle, EResolveErrorMode OnError)
+TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::HandleError(EResolveErrorMode OnError, const TCHAR* Message) const
+{
+	switch (OnError)
+	{
+	case EResolveErrorMode::AllowNull:
+		return TSharedPtr<FEnhancedAsyncActionContext>();
+	case EResolveErrorMode::Fallback:
+		return DummyContext;
+	case EResolveErrorMode::Assert:
+		ensureAlwaysMsgf(false, TEXT("%s"), Message);
+		return DummyContext;
+	default:
+		checkNoEntry();
+		return DummyContext;
+	}
+}
+
+TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::FindContext(const FAsyncContextHandleBase& Handle, EResolveErrorMode OnError)
 {
 	if (!Handle.IsValid())
-	{ // handle itself is not valid
-		switch (OnError)
-		{
-		case EResolveErrorMode::AllowNull:
-			return TSharedPtr<FEnhancedAsyncActionContext>();
-		case EResolveErrorMode::Fallback:
-			return DummyContext;
-		case EResolveErrorMode::Assert:
-			ensureAlwaysMsgf(false, TEXT("Failed to locate bound context object"));
-			return DummyContext;
-		}
+	{
+		return HandleError(OnError, TEXT("Failed to locate bound context object"));
 	}
 
-	// TBD: choose how to lookup context
-	// option 1: handle has weak ptr to data and use it (faster, blueprints carry weakptr over)
-	// option 2: lock & search in map by Handle.ContextId (slower, needs lock)
 	auto ActualContext = Handle.Data.Pin();
 
-	if (!ActualContext || !ActualContext->IsValid())
-	{ // implementation is bad (like inner uobject member ref)
-		switch (OnError)
-		{
-		case EResolveErrorMode::AllowNull:
-			return TSharedPtr<FEnhancedAsyncActionContext>();
-		case EResolveErrorMode::Fallback:
-			return DummyContext;
-		case EResolveErrorMode::Assert:
-			ensureAlwaysMsgf(false, TEXT("Failed to locate bound context object"));
-			return DummyContext;
-		}
+	if (!ActualContext)
+	{
+		return HandleError(OnError, TEXT("Failed to locate bound context object"));
+	}
+
+	if (!ActualContext->IsValid())
+	{
+		return HandleError(OnError, TEXT("Bound context object is stale"));
 	}
 	return ActualContext;
 }
 
-TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::ResolveContextHandle(const FEnhancedAsyncActionContextHandle& Handle, EResolveErrorMode OnError)
+TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::FindContext(const FAsyncContextId& ContextId, EResolveErrorMode OnError)
 {
-	return ResolveContextHandleInternal(Handle, OnError);
-}
+	if (!ContextId)
+	{
+		return HandleError(OnError, TEXT("Failed to locate bound context object"));
+	}
 
-TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncContextManager::ResolveContextHandle(const FEnhancedLatentActionContextHandle& Handle, EResolveErrorMode OnError)
-{
-	return ResolveContextHandleInternal(Handle, OnError);
+	FScopeLock Lock(&MapCriticalSection);
+
+	// auto ActualContext = Handle.Data.Pin();
+	auto ActualContext = ActionContexts.FindRef(ContextId);
+
+	if (!ActualContext)
+	{
+		return HandleError(OnError, TEXT("Failed to locate bound context object"));
+	}
+
+	if (!ActualContext->IsValid())
+	{
+		return HandleError(OnError, TEXT("Bound context object is stale"));
+	}
+	return ActualContext;
 }
 
 void FEnhancedAsyncContextManager::FGCCollector::AddReferencedObjects(FReferenceCollector& Collector)
@@ -291,6 +300,8 @@ void FEnhancedAsyncContextManager::OnShutdown()
 	ObjectCollector.Reset();
 	ActionContexts.Empty();
 	TrackedObjects.Empty();
+
+	FCoreDelegates::OnExit.RemoveAll(this);
 }
 
 void FEnhancedAsyncContextManager::FObjectListener::UpdateState()

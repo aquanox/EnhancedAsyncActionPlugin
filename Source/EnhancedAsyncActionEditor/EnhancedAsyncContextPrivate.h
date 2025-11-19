@@ -11,6 +11,12 @@ class UEdGraphSchema_K2;
 
 namespace EAA::Internals
 {
+	static const FName PIN_Handle = TEXT("Handle");
+	static const FName PIN_Index = TEXT("Index");
+	static const FName PIN_Value = TEXT("Value");
+	static const FName PIN_Action = TEXT("Action");
+	static const FName PIN_Object = TEXT("Object");
+
 	FString ToDebugString(const FProperty* Pin);
 	FString ToDebugString(const UEdGraphPin* Pin);
 	FString ToDebugString(const FEdGraphPinType& Type);

@@ -6,6 +6,7 @@
 #include "K2Node_AddPinInterface.h"
 #include "K2Node_AsyncContextInterface.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_EnhancedAsyncTaskBase.h"
 #include "K2Node_EnhancedCallLatentFunction.generated.h"
 
 #define UE_API ENHANCEDASYNCACTIONEDITOR_API
@@ -34,6 +35,29 @@ public:
 	virtual void PinConnectionListChanged(UEdGraphPin* Pin) override;
 	virtual void PinTypeChanged(UEdGraphPin* Pin) override;
 	virtual void PostReconstructNode() override;
+
+	static bool GetContextPin(UK2Node_CallFunction* Node, UEdGraphPin*& InPin);
+	static bool IsEventMode(UK2Node_CallFunction* Node);
+
+	using FInputPinInfo = UK2Node_EnhancedAsyncTaskBase::FInputPinInfo;
+	using FOutputPinInfo = UK2Node_EnhancedAsyncTaskBase::FOutputPinInfo;
+
+	// bool HandleSetContextData(
+	// 	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+	// 	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
+	bool HandleSetContextDataVariadic(
+		const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
+	// bool HandleGetContextData(
+	// 	const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+	// 	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
+	bool HandleGetContextDataVariadic(
+		const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
+		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
 
 	virtual void ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph) override;
 

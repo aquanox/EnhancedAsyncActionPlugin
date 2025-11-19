@@ -88,7 +88,7 @@ bool FEAALibraryOpsComplex::RunTest(FString const&)
 
 	using Lib = UEnhancedAsyncContextLibrary;
 
-	TSharedPtr<FEnhancedAsyncActionContext> Context = FEnhancedAsyncContextManager::Get().ResolveContextHandle(Handle);
+	TSharedPtr<FEnhancedAsyncActionContext> Context = FEnhancedAsyncContextManager::Get().FindContext(Handle);
 	UTEST_TRUE_EXPR(Context.IsValid());
 
 	{

@@ -30,19 +30,20 @@ namespace EAA::Internals
 	//	  default = external InstancedPropertyBag
 	static const FName MD_AsyncContextContainer = TEXT("AsyncContextContainer");
 
-	// Expose async context pin on node
+	// Expose context pin on async action node
 	static const FName MD_ExposedAsyncContext = TEXT("ExposedAsyncContext");
 
-	// Marker to use enhanced node. TBD: This or async context
-	static const FName MD_HasLatentContext = TEXT("LatentContext");
+	// Marker to use enhanced latent node.
+	// Example: HasLatentContext=HandleParameter
+	static const FName MD_HasLatentContext = TEXT("HasLatentContext");
 
-	static const FName PIN_Handle = TEXT("Handle");
-	static const FName PIN_Index = TEXT("Index");
-	static const FName PIN_Value = TEXT("Value");
-	static const FName PIN_Action = TEXT("Action");
-	static const FName PIN_Object = TEXT("Object");
+	// Marker to use enhanced repeatable latent node.
+	// Example: RepeatableLatent=DelegateParameter
+	static const FName MD_RepeatableLatent = TEXT("RepeatableLatent");
 
 	UE_API bool IsValidContainerProperty(const UObject* Object, const FName& Property);
+
+	UE_API bool IsValidLatentCallable(const UFunction* Object);
 
 	template <typename T>
 	T* GetMemberChecked(const UObject* Object, const FName& Property, const UScriptStruct* ExpectedType = nullptr)

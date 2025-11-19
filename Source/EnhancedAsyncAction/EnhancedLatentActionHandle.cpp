@@ -5,27 +5,38 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedLatentActionHandle)
 
-bool FLatentCallResult::IsValid() const
-{
-	return OwningObject.IsValid() && UUID != 0 && Action != nullptr;
-}
-
 FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle()
 	: FAsyncContextHandleBase(FAsyncContextId::Invalid)
 {
 }
 
-FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle(FAsyncContextId ContextId, TWeakObjectPtr<const UObject> Owner, TSharedRef<FEnhancedAsyncActionContext> Data)
-	: FAsyncContextHandleBase(ContextId, Owner, Data)
+FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle(FAsyncContextId ContextId, FLatentCallInfo InCallInfo, TSharedRef<FEnhancedAsyncActionContext> Data)
+	: FAsyncContextHandleBase(ContextId, InCallInfo.OwningObject, Data), CallInfo(InCallInfo)
 {
+}
+
+bool FEnhancedLatentActionContextHandle::IsValid() const
+{
+	return FAsyncContextHandleBase::IsValid() && CallInfo.UUID != 0 && CallInfo.CallID != 0;
+}
+
+void FEnhancedLatentActionContextHandle::ReleaseContext() const
+{
+	FEnhancedAsyncContextManager::Get().DestroyContext(GetId());
+}
+
+void FEnhancedLatentActionContextHandle::ReleaseContextAndInvalidate()
+{
+	ReleaseContext();
+	*this = FEnhancedLatentActionContextHandle();
 }
 
 TSharedPtr<FEnhancedAsyncActionContext> FEnhancedLatentActionContextHandle::GetContext() const
 {
-	return FEnhancedAsyncContextManager::Get().ResolveContextHandle(*this, EResolveErrorMode::AllowNull);
+	return FEnhancedAsyncContextManager::Get().FindContext(*this, EResolveErrorMode::AllowNull);
 }
 
 TSharedRef<FEnhancedAsyncActionContext> FEnhancedLatentActionContextHandle::GetContextSafe() const
 {
-	return FEnhancedAsyncContextManager::Get().ResolveContextHandle(*this, EResolveErrorMode::Fallback).ToSharedRef();
+	return FEnhancedAsyncContextManager::Get().FindContext(*this, EResolveErrorMode::Fallback).ToSharedRef();
 }

@@ -15,10 +15,10 @@ FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle(FAsyncConte
 
 TSharedPtr<FEnhancedAsyncActionContext> FEnhancedAsyncActionContextHandle::GetContext() const
 {
-	return FEnhancedAsyncContextManager::Get().ResolveContextHandle(*this, EResolveErrorMode::AllowNull);
+	return FEnhancedAsyncContextManager::Get().FindContext(*this, EResolveErrorMode::AllowNull);
 }
 
 TSharedRef<FEnhancedAsyncActionContext> FEnhancedAsyncActionContextHandle::GetContextSafe() const
 {
-	return FEnhancedAsyncContextManager::Get().ResolveContextHandle(*this, EResolveErrorMode::Fallback).ToSharedRef();
+	return FEnhancedAsyncContextManager::Get().FindContext(*this, EResolveErrorMode::Fallback).ToSharedRef();
 }

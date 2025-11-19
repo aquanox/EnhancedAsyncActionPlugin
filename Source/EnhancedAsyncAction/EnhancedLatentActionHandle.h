@@ -3,74 +3,167 @@
 #pragma once
 
 #include "UObject/Object.h"
-#include "Engine/LatentActionManager.h"
+#include "UObject/Package.h"
 #include "LatentActions.h"
 #include "Templates/TypeHash.h"
-#include "StructUtils/PropertyBag.h" // TBD: remove and force it to be included if used?
 #include "EnhancedAsyncContextHandle.h"
+#include "EnhancedAsyncContextShared.h"
 #include "EnhancedLatentActionHandle.generated.h"
 
 #define UE_API ENHANCEDASYNCACTION_API
 
-template<typename TLatentBase>
-class TEnhancedLatentActionWrapper : public FPendingLatentAction
+class FEnhancedLatentActionDelegate;
+struct FEnhancedLatentActionContextHandle;
+
+/**
+ * Internal structure to pass information about latent action and build unique context identifier
+ */
+struct FLatentCallInfo
+{
+	using FDelegate = TDelegate<void(const FEnhancedLatentActionContextHandle&)>;
+
+	// Owning object
+	TWeakObjectPtr<const UObject> OwningObject;
+	// Stable latent function identifier
+	int32 UUID = 0;
+	// Unique random identifier to track each call
+	int32 CallID = 0;
+	// optional action handle
+	FDelegate Delegate;
+
+	inline bool IsValid() const
+	{
+		return OwningObject.IsValid() && UUID != 0 && CallID != 0;
+	}
+
+	FString GetDebugString() const
+	{
+		return FString::Printf(TEXT("Owner=%s UUID=%d CallID=%x Delegate=%d"), *GetNameSafe(OwningObject.Get()), UUID, CallID, (int32)Delegate.IsBound());
+	}
+};
+
+/**
+ * Latent call context handle that is passed around
+ */
+USTRUCT(BlueprintType)
+struct UE_API FEnhancedLatentActionContextHandle : public FAsyncContextHandleBase
+{
+	GENERATED_BODY()
+public:
+	FEnhancedLatentActionContextHandle();
+	FEnhancedLatentActionContextHandle(FAsyncContextId ContextId, FLatentCallInfo CallInfo, TSharedRef<FEnhancedAsyncActionContext> Data);
+
+	/**
+	 * Is this handle considered valid?
+	 *
+	 * Tests for valid call identifier and alive owning object.
+	 */
+	bool IsValid() const;
+
+	FString GetDebugString() const
+	{
+		return FString::Printf(TEXT("%x %s"), (uint32)GetId(), *CallInfo.GetDebugString());
+	}
+
+	/** Shortcut to resolve context from manager */
+	TSharedPtr<FEnhancedAsyncActionContext> GetContext() const;
+	/** Shortcut to resolve context from manager */
+	TSharedRef<FEnhancedAsyncActionContext> GetContextSafe() const;
+
+	/*
+	 * Free capture context. Usually to be called from wrappers
+	 */
+	void ReleaseContext() const;
+	/*
+	 * Free capture context and invalidate handle used by this action.
+	 */
+	void ReleaseContextAndInvalidate();
+
+protected:
+	friend class FEnhancedAsyncContextManager;
+
+	template<typename>
+	friend class TEnhancedLatentAction;
+	template<typename>
+	friend class TEnhancedRepeatableLatentAction;
+
+	// Latent function call unique identifier that can be obtained from outside
+	FLatentCallInfo CallInfo;
+};
+
+DECLARE_DYNAMIC_DELEGATE_OneParam(FEnhancedLatentActionDelegate, const FEnhancedLatentActionContextHandle&, Handle);
+
+template<>
+struct TStructOpsTypeTraits<FEnhancedLatentActionContextHandle>
+	: public TStructOpsTypeTraitsBase2<FEnhancedLatentActionContextHandle>
+{
+	enum
+	{
+		// WithCopy = true,
+	};
+};
+
+/**
+ * A decorator to handle unique latent actions, when each call checks "Does the manager have another task with ID".
+ *
+ * Decorator saves current context and restores it when triggered.
+ *
+ * @tparam TLatentBase Base class of latent action
+ */
+template<typename TLatentBase = FPendingLatentAction>
+class TEnhancedLatentAction : public TLatentBase
 {
 	using Super = TLatentBase;
+	using ThisClass = TEnhancedLatentAction;
 public:
-	TEnhancedLatentActionWrapper(FPendingLatentAction* Inner) : Inner(Inner) {  }
-	virtual ~TEnhancedLatentActionWrapper() = default;
+	template<typename ... TArgs>
+	TEnhancedLatentAction(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
+		: Super(Forward<TArgs>(Args)...), SavedContextHandle(Handle), ContextHandleRef(const_cast<FEnhancedLatentActionContextHandle&>(Handle))
+	{
+		ContextHandleRef = SavedContextHandle;
+	}
+
+	virtual ~TEnhancedLatentAction() = default;
 
 	virtual void UpdateOperation(FLatentResponse& Response) override
 	{
-		Inner->UpdateOperation(Response);
+		UE_LOG(LogEnhancedAction, Log, TEXT("%p UPDATE %s"), this, *SavedContextHandle.GetDebugString());
+
+		const int32 InitialCount = CountResponses(Response);
+
+		// Call parent
+		Super::UpdateOperation(Response);
+
+		const int32 UpdatedResponse = CountResponses(Response);
+
+		// action was triggered for execution, select context
+		if (InitialCount != UpdatedResponse)
+		{
+			NotifyActionTriggered();
+		}
 	}
 
-	virtual void NotifyObjectDestroyed() override
+	virtual void NotifyActionTriggered()
 	{
-		Context.Reset();
-		Inner->NotifyObjectDestroyed();
+		UE_LOG(LogEnhancedAction, Log, TEXT("%p SELECT %s"), this, *SavedContextHandle.GetDebugString());
+
+		// Switch to context
+		ContextHandleRef = SavedContextHandle;
 	}
-
-	virtual void NotifyActionAborted() override
-	{
-		Context.Reset();
-		Inner->NotifyActionAborted();
-	}
-
-#if WITH_EDITOR
-	virtual FString GetDescription() const override
-	{
-		FString Base = Inner->GetDescription();
-		Base.Append(TEXT(" (with context)"));
-		return Base;
-	}
-#endif
-
-	FInstancedPropertyBag* GetContextContainer() const { return &Context; }
-private:
-	FPendingLatentAction* const Inner;
-	mutable FInstancedPropertyBag Context;
-};
-
-template<typename TLatentBase = FPendingLatentAction>
-class TEnhancedLatentActionExtension : public TLatentBase
-{
-	using Super = TLatentBase;
-	using ThisClass = TEnhancedLatentActionExtension;
-public:
-	// use all parent type constructors
-	using TLatentBase::TLatentBase;
-	virtual ~TEnhancedLatentActionExtension() = default;
 
 	virtual void NotifyObjectDestroyed()
 	{
-		Context.Reset();
+		UE_LOG(LogEnhancedAction, Log, TEXT("%p DESTROY %s"), this, *SavedContextHandle.GetDebugString());
+
+		SavedContextHandle.ReleaseContextAndInvalidate();
 		Super::NotifyObjectDestroyed();
 	}
 
 	virtual void NotifyActionAborted()
 	{
-		Context.Reset();
+		UE_LOG(LogEnhancedAction, Log, TEXT("%p ABORT %s"),this, *SavedContextHandle.GetDebugString());
+
+		SavedContextHandle.ReleaseContextAndInvalidate();
 		Super::NotifyActionAborted();
 	}
 
@@ -83,106 +176,77 @@ public:
 	}
 #endif
 
-	FInstancedPropertyBag* GetContextContainer() const { return &Context; }
 private:
-	mutable FInstancedPropertyBag Context;
+
+	FORCEINLINE static int32 CountResponses(struct FLatentResponse& Response)
+	{
+		struct FriendlyResponse : public FLatentResponse
+		{
+			friend class TEnhancedLatentAction;
+		};
+		return static_cast<FriendlyResponse&>(Response).LinksToExecute.Num();
+	}
+
+protected:
+	// The capture context handle
+	FEnhancedLatentActionContextHandle SavedContextHandle;
+	// The reference to context handle in graph for updates
+	FEnhancedLatentActionContextHandle& ContextHandleRef;
 };
 
 /**
- * Internal structure to pass information about latent action to plugin
+ * A decorator to handle `repeatable latent actions` that schedule new action every time function is invoked.
+ *
+ * If multiple repeatable actions triggered by normal means - only latest context will be picked after NotifyActionTriggered,
+ * to avoid that a different node generation has to be used.
+ *
+ * @see UK2Node_LoadAsset
+ * @see UK2Node_LoadAssetClass
+ *
+ * @tparam TLatentBase Latent action base class
  */
-USTRUCT(BlueprintType, meta=(DisableSplitPin))
-struct UE_API FLatentCallResult
+template<typename TLatentBase = FPendingLatentAction>
+class TEnhancedRepeatableLatentAction : public TEnhancedLatentAction<TLatentBase>
 {
-	GENERATED_BODY()
+	using Super = TEnhancedLatentAction<TLatentBase>;
+	using ThisClass = TEnhancedRepeatableLatentAction;
 public:
-	FLatentCallResult() = default;
-
-	bool IsValid() const;
-
-	template<typename TAction>
-	static FLatentCallResult Make(const FLatentActionInfo& Info, TEnhancedLatentActionWrapper<TAction>* Action)
+	template<typename ... TArgs>
+	TEnhancedRepeatableLatentAction(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
+		: Super(Handle, Forward<TArgs>(Args)...)
 	{
-		check(Action != nullptr);
-		FLatentCallResult Handle;
-		Handle.OwningObject = Info.CallbackTarget;
-		Handle.UUID = Info.UUID;
-		Handle.Action = Action;
-		Handle.Container = Action->GetContextContainer();
-		return Handle;
+		Callback = Handle.CallInfo.Delegate;
+		ensureAlways(Callback.IsBound());
 	}
 
-	template<typename TAction>
-	static FLatentCallResult Make(const FLatentActionInfo& Info, TEnhancedLatentActionExtension<TAction>* Action)
+	virtual ~TEnhancedRepeatableLatentAction() = default;
+
+	virtual void NotifyActionTriggered() override
 	{
-		check(Action != nullptr);
-		FLatentCallResult Handle;
-		Handle.OwningObject = Info.CallbackTarget;
-		Handle.UUID = Info.UUID;
-		Handle.Action = Action;
-		Handle.Container = Action->GetContextContainer();
-		return Handle;
+		// There is no need to "Switch" to context as it is handled differently by node
+		// Each trigger will invoke a delegate instead.
+		// The "Then" pin of original latent task not connected to anything.
+		Callback.ExecuteIfBound(this->SavedContextHandle);
 	}
 
-	template<typename TAction>
-	static FLatentCallResult Make(const FLatentActionInfo& Info, TAction* Action)
+	static UFunction* GetDelegateSignature()
 	{
-		check(Action != nullptr);
-		FLatentCallResult Handle;
-		Handle.OwningObject = Info.CallbackTarget;
-		Handle.UUID = Info.UUID;
-		Handle.Action = Action;
-		return Handle;
+		UFunction* Function = FindObject<UFunction>(
+			FindPackage(nullptr, TEXT("/Script/EnhancedAsyncAction")), TEXT("EnhancedLatentActionDelegate__DelegateSignature")
+		);
+		check(Function != nullptr);
+		return Function;
 	}
 
-	static FLatentCallResult MakeInvalid(const FLatentActionInfo& Info)
-	{
-		return FLatentCallResult();
-	}
-
-private:
-	friend class FEnhancedAsyncContextManager;
-	friend struct FAsyncContextId;
-
-	TWeakObjectPtr<UObject> OwningObject;
-	int32 UUID = 0;
-	const void* Action = nullptr;
-	FInstancedPropertyBag* Container = nullptr;
-};
-
-USTRUCT(BlueprintType, meta=(DisableSplitPin))
-struct UE_API FEnhancedLatentActionContextHandle
-#if CPP
-	: public FAsyncContextHandleBase
-#endif
-{
-	GENERATED_BODY()
-private:
-	friend class FEnhancedAsyncContextManager;
-public:
-	FEnhancedLatentActionContextHandle();
-	FEnhancedLatentActionContextHandle(FAsyncContextId ContextId, TWeakObjectPtr<const UObject> Owner, TSharedRef<FEnhancedAsyncActionContext> Data);
-
-	/** Shortcut to resolve context from manager */
-	TSharedPtr<FEnhancedAsyncActionContext> GetContext() const;
-	/** Shortcut to resolve context from manager */
-	TSharedRef<FEnhancedAsyncActionContext> GetContextSafe() const;
+protected:
+	FLatentCallInfo::FDelegate Callback;
 };
 
 template<>
-struct TStructOpsTypeTraits<FEnhancedLatentActionContextHandle>
-	: public TStructOpsTypeTraitsBase2<FEnhancedLatentActionContextHandle>
+inline FAsyncContextId FAsyncContextId::Make(const FLatentCallInfo& InResult)
 {
-	enum
-	{
-		WithCopy = true,
-	};
-};
-
-template<>
-inline FAsyncContextId FAsyncContextId::Make(const FLatentCallResult& InResult)
-{
-	return FAsyncContextId( ::PointerHash(InResult.Action, InResult.UUID) );
+	const uint32 Hash = ::PointerHash(InResult.OwningObject.Get(), ::HashCombine(InResult.UUID, InResult.CallID));
+	return FAsyncContextId(Hash, FAsyncContextId::EContextType::CT_LatentAction);
 }
 
 #undef UE_API

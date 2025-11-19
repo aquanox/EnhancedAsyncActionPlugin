@@ -12,6 +12,7 @@
 
 struct FEnhancedAsyncActionContextHandle;
 struct FEnhancedLatentActionContextHandle;
+struct FLatentCallInfo;
 
 /**
  * Manager class for async action context data.
@@ -38,20 +39,17 @@ public:
 	 *
 	 * @return registered handle for public use
 	 */
-	TValueOrError<FEnhancedLatentActionContextHandle, FString> CreateContext(const struct FLatentCallResult& CallResult);
+	TValueOrError<FEnhancedLatentActionContextHandle, FString> CreateContext(const FLatentCallInfo& CallInfo);
+
+	/**
+	 * Destroy context by identifier
+	 */
+	TValueOrError<int32, FString> DestroyContext(const FAsyncContextId& ContextId);
 
 	/**
 	 * Destroy context used by latent action
 	 */
-	void DestroyContext(const struct FLatentCallResult& CallResult);
-
-	/**
-	 * Find context instance for given identifier
-	 *
-	 * @param ContextId context identifier
-	 * @return bound context object
-	 */
-	TSharedPtr<FEnhancedAsyncActionContext> FindContext(FAsyncContextId ContextId, bool bAllowNull = true);
+	TValueOrError<int32, FString> DestroyContext(const FEnhancedLatentActionContextHandle& Handle);
 
 	/**
 	 * Find public handle for given action object
@@ -64,26 +62,21 @@ public:
 	/**
 	 * Find public handle for given latent action
 	 *
-	 * @param CallResult latent call identifier
+	 * @param CallInfo latent call identifier
 	 * @return registered handle for public use
 	 */
-	FEnhancedLatentActionContextHandle FindContextHandle(const FLatentCallResult& CallResult);
-
-	/**
-	 * Resolve context instance from given action handle
-	 *
-	 * @param Handle  requestor handle
-	 * @return bound context object
-	 */
-	TSharedPtr<FEnhancedAsyncActionContext> ResolveContextHandle(const FEnhancedAsyncActionContextHandle& Handle, EResolveErrorMode OnError = EResolveErrorMode::Default);
+	FEnhancedLatentActionContextHandle FindContextHandle(const FLatentCallInfo& CallInfo);
 
 	/**
 	 * Resolve context instance from given latent handle
 	 *
-	 * @param Handle  requestor handle
+	 * @param ContextId  requestor identifier
+	 * @param OnError error handling mode
+	 *
 	 * @return bound context object
 	 */
-	TSharedPtr<FEnhancedAsyncActionContext> ResolveContextHandle(const FEnhancedLatentActionContextHandle& Handle, EResolveErrorMode OnError = EResolveErrorMode::Default);
+	TSharedPtr<FEnhancedAsyncActionContext> FindContext(const FAsyncContextId& ContextId, EResolveErrorMode OnError = EResolveErrorMode::AllowNull);
+	TSharedPtr<FEnhancedAsyncActionContext> FindContext(const FAsyncContextHandleBase& Handle, EResolveErrorMode OnError = EResolveErrorMode::AllowNull);
 
 private:
 
@@ -92,11 +85,7 @@ private:
 
 	void SetContextInternal(FAsyncContextId ContextId, TSharedRef<FEnhancedAsyncActionContext> Context, const UObject* TrackedOwner);
 
-	TSharedPtr<FEnhancedAsyncActionContext> FindContextInternal(const FAsyncContextId& ContextId);
-
-	template<typename T>
-	TSharedPtr<FEnhancedAsyncActionContext> ResolveContextHandleInternal(const T& Handle, EResolveErrorMode OnError);
-
+	TSharedPtr<FEnhancedAsyncActionContext> HandleError(EResolveErrorMode OnError, const TCHAR* Message) const;
 private:
 	void AddReferencedObjects(FReferenceCollector& Collector);
 
@@ -138,7 +127,7 @@ private:
 
 	TSharedPtr<FEnhancedAsyncActionContext> DummyContext;
 
-	FCriticalSection MapCriticalSection;
+	mutable FCriticalSection MapCriticalSection;
 
 	// All known async contexts
 	TMap<FAsyncContextId, TSharedPtr<FEnhancedAsyncActionContext>> ActionContexts;

@@ -11,10 +11,7 @@
 
 // Wrapper over actual context data for blueprints
 USTRUCT(BlueprintType, meta=(DisableSplitPin))
-struct UE_API FEnhancedAsyncActionContextHandle
-#if CPP
-	: public FAsyncContextHandleBase
-#endif
+struct UE_API FEnhancedAsyncActionContextHandle : public FAsyncContextHandleBase
 {
 	GENERATED_BODY()
 public:
@@ -33,14 +30,14 @@ struct TStructOpsTypeTraits<FEnhancedAsyncActionContextHandle>
 {
 	enum
 	{
-		WithCopy = true,
+		// WithCopy = true,
 	};
 };
 
 template<>
 inline FAsyncContextId FAsyncContextId::Make(const UObject* const& InObject)
 {
-	return FAsyncContextId( ::PointerHash(InObject, INDEX_NONE) );
+	return FAsyncContextId( ::PointerHash(InObject, INDEX_NONE), FAsyncContextId::EContextType::CT_AsyncAction );
 }
 
 #undef UE_API

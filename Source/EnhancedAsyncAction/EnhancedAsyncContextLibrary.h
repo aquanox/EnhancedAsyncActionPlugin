@@ -9,6 +9,8 @@
 
 struct FEnhancedAsyncActionContextHandle;
 struct FEnhancedLatentActionContextHandle;
+struct FLatentContextInfo;
+class FEnhancedLatentActionDelegate;
 
 /**
  * Blueprint integration helpers
@@ -27,7 +29,7 @@ public:
 	 *
 	 * @return Context handle
 	 */
-	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=false, AdvancedDisplay=1))
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=true, AdvancedDisplay=1))
 	static UE_API FEnhancedAsyncActionContextHandle CreateContextForObject(const UObject* Action, FName InnerContainerProperty = NAME_None);
 
 	/**
@@ -35,16 +37,16 @@ public:
 	 *
 	 * @return Context handle
 	 */
-	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=false))
-	static UE_API FEnhancedLatentActionContextHandle CreateContextForLatent(const struct FLatentCallResult& CallInfo);
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=true))
+	static UE_API FEnhancedLatentActionContextHandle CreateContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate);
 
 	/**
 	 * Destroy capture context used by latent function. Called by UK2Node_EnhancedCallLatentFunction.
 	 *
 	 * @return Context handle
 	 */
-	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=false))
-	static UE_API void DestroyContextForLatent(const struct FLatentCallResult& CallInfo);
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=true))
+	static UE_API void DestroyContextForLatent(const FEnhancedLatentActionContextHandle& Handle);
 
 	/**
 	 * Setup context container according to spec string. Called by UK2Node_EnhancedAsyncAction.
@@ -94,6 +96,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Debug", meta=(DevelopmentOnly))
 	static UE_API void DumpContext(const FEnhancedAsyncActionContextHandle& Handle);
 
+	// ========== CASTS =============
+
+	UFUNCTION(BlueprintPure, Category="EnhancedAsyncAction|Casts", meta=(CompactNodeTitle = "->", BlueprintAutocast, BlueprintInternalUseOnly=true))
+	static UE_API struct FAsyncContextHandleBase GetHandleFromLatentHandle(const FEnhancedAsyncActionContextHandle& Handle);
+
+	UFUNCTION(BlueprintPure, Category="EnhancedAsyncAction|Casts", meta=(CompactNodeTitle = "->", BlueprintAutocast, BlueprintInternalUseOnly=true))
+	static UE_API struct FAsyncContextHandleBase GetHandleFromActionHandle(const FEnhancedLatentActionContextHandle& Handle);
 
 	// ========= SETTERS [ STANDARD ] ============
 
@@ -126,8 +135,8 @@ public:
 
 	// ======== SETTERS [ GENERIC ] ============
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EnhancedAsyncAction|Getters", DisplayName="Set Value Variadic", meta=(Variadic, BlueprintInternalUseOnly=true))
-	static UE_API void Handle_SetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names);
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EnhancedAsyncAction|Getters", DisplayName="Set Value Variadic", meta=(Variadic, BlueprintInternalUseOnly=true, CustomStructureParam="Handle"))
+	static UE_API void Handle_SetValue_Variadic(const FAsyncContextHandleBase& Handle, const TArray<FString>& Names);
 
 	DECLARE_FUNCTION(execHandle_SetValue_Variadic);
 
@@ -207,8 +216,8 @@ public:
 
 	// ========= GETTERS [ GENERIC ] ============
 
-	UFUNCTION(BlueprintCallable, CustomThunk, Category="EnhancedAsyncAction|Getters", DisplayName="Get Value Variadic", meta=(Variadic, BlueprintInternalUseOnly=true))
-	static UE_API void Handle_GetValue_Variadic(const FEnhancedAsyncActionContextHandle& Handle, const TArray<FString>& Names);
+	UFUNCTION(BlueprintCallable, CustomThunk, Category="EnhancedAsyncAction|Getters", DisplayName="Get Value Variadic", meta=(Variadic, BlueprintInternalUseOnly=true, CustomStructureParam="Handle"))
+	static UE_API void Handle_GetValue_Variadic(const FAsyncContextHandleBase& Handle, const TArray<FString>& Names);
 
 	DECLARE_FUNCTION(execHandle_GetValue_Variadic);
 

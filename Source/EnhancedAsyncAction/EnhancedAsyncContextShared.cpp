@@ -7,6 +7,7 @@
 #include "UObject/UnrealType.h"
 #include "UObject/TextProperty.h"
 #include "EnhancedAsyncContextLibrary.h"
+#include "EnhancedLatentActionHandle.h"
 
 DEFINE_LOG_CATEGORY(LogEnhancedAction);
 
@@ -110,4 +111,24 @@ bool EAA::Internals::IsValidContainerProperty(const UObject* Object, const FName
 		return false;
 
 	return StructProperty->Struct && StructProperty->Struct->IsChildOf(FInstancedPropertyBag::StaticStruct());
+}
+
+bool EAA::Internals::IsValidLatentCallable(const UFunction* Object)
+{
+	if (!IsValid(Object))
+		return false;
+
+	if (!Object->HasAllFunctionFlags(FUNC_BlueprintCallable))
+		return false;
+	if (!Object->HasMetaData(TEXT("Latent")))
+		return false;
+
+	if (auto* Metadata = Object->FindMetaData(EAA::Internals::MD_HasLatentContext))
+	{
+		if (auto* Property = CastField<FStructProperty>(Object->FindPropertyByName(*Metadata->TrimStartAndEnd())))
+		{
+			return Property->Struct == FEnhancedLatentActionContextHandle::StaticStruct() && Property->HasAllPropertyFlags(CPF_ReferenceParm);
+		}
+	}
+	return false;
 }

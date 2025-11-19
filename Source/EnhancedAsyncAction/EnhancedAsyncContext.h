@@ -52,6 +52,7 @@ struct UE_API FEnhancedAsyncActionContext
 	virtual void SetupFromStringDefinition(const FString& InDefinition) {}
 	virtual void SetupFromProperties(TConstArrayView<TPair<FName, const FProperty*>> Properties) {}
 
+	virtual const UObject* GetOwningObject() const { return nullptr; }
 	virtual bool IsValid() const = 0;
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) {}
 

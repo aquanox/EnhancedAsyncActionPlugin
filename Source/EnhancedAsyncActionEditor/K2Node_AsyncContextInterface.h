@@ -4,6 +4,8 @@
 
 #include "EdGraph/EdGraphNode.h"
 #include "UObject/Interface.h"
+#include "UObject/WeakObjectPtr.h"
+#include "K2Node.h"
 #include "K2Node_AddPinInterface.h"
 #include "K2Node_AsyncContextInterface.generated.h"
 
@@ -117,6 +119,8 @@ public:
 
 	bool AnyCapturePinHasLinks() const;
 
+	void OrphanCapturePins();
+
 	void GetStandardPins(EEdGraphPinDirection Dir, TArray<UEdGraphPin*> &OutPins) const;
 };
 
@@ -136,3 +140,4 @@ struct FK2Node_AsyncContextMenuActions
 };
 
 #undef UE_API
+

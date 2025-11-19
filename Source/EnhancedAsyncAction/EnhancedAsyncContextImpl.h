@@ -102,6 +102,7 @@ public:
 	FEnhancedAsyncActionContext_PropertyBagRef(const UObject* OwningObject, FName PropertyName);
 	FEnhancedAsyncActionContext_PropertyBagRef(const UObject* OwningObject, FInstancedPropertyBag* ContainerObject, bool bExpose);
 
+	virtual const UObject* GetOwningObject() const override { return OwnerRef.GetEvenIfUnreachable(); }
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBagRef"); }
 	virtual bool IsValid() const override;
 protected:
@@ -119,6 +120,7 @@ class UE_API FEnhancedAsyncActionContext_PropertyBag : public FEnhancedAsyncActi
 public:
 	explicit FEnhancedAsyncActionContext_PropertyBag(const UObject* OwningObject);
 
+	virtual const UObject* GetOwningObject() const override { return OwnerRef.GetEvenIfUnreachable(); }
 	virtual FString GetDebugName() const override { return TEXT("FEnhancedAsyncActionContext_PropertyBag"); }
 	virtual bool IsValid() const override;
 protected:

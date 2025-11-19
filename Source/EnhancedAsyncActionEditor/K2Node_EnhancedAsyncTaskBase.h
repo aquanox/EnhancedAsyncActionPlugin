@@ -58,9 +58,6 @@ public:
 		int32 CaptureIndex = INDEX_NONE;
 		UEdGraphPin* OutputPin = nullptr;
 		UK2Node_TemporaryVariable* TempVar = nullptr;
-
-		const FName& GetName() const { return OutputPin->PinName; }
-		const FName& GetCategory() const { return OutputPin->PinType.PinCategory; }
 	};
 
 	bool ValidateDelegates(
@@ -69,13 +66,13 @@ public:
 	bool ValidateCaptures(
 	    const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
-	bool HandleSetContextData(
+	static bool HandleSetContextData(
 		const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
-		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+		UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
-	bool HandleSetContextDataVariadic(
+	static bool HandleSetContextDataVariadic(
 		const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
-		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+		UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
 	bool HandleInvokeActivate(
 		UEdGraphPin* InProxyObjectPin, UEdGraphPin*& InOutLastThenPin,
@@ -85,15 +82,13 @@ public:
 		class UK2Node_CallFunction* CallCreateProxyObjectNode, UEdGraphPin*& InOutLastThenPin,
 		const UEdGraphSchema_K2* Schema, UEdGraph* SourceGraph, FKismetCompilerContext& CompilerContext);
 
-	bool HandleGetContextData(
+	static bool HandleGetContextData(
 		const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
-		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+		UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
-	bool HandleGetContextDataVariadic(
+	static bool HandleGetContextDataVariadic(
 		const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
-		const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
-
-	void OrphanCapturePins();
+		UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
 	FString BuildContextConfigString() const;
 
