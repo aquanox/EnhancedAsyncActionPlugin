@@ -323,21 +323,6 @@ bool UK2Node_EnhancedAsyncTaskBase::ValidateCaptures(const UEdGraphSchema_K2* Sc
 		return true;
 	});
 
-	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
-	{
-		if (!InputPin->LinkedTo.Num() && OutputPin->LinkedTo.Num())
-		{
-			const FString FormattedMessage = FText::Format(
-				LOCTEXT("EnhancedAsyncTaskNoValue", "EnhancedAsyncTaskBase: No value assigned for capture index {0} @@"),
-				FText::AsNumber(Index)
-			).ToString();
-			CompilerContext.MessageLog.Error(*FormattedMessage, this);
-			bIsErrorFree = false;
-			return false;
-		}
-		return true;
-	});
-
 	return bIsErrorFree;
 }
 
@@ -425,6 +410,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 		const FName VariadicPropertyName = EAA::Internals::IndexToName(Info.CaptureIndex);
 
 		UEdGraphPin* const InputPin = Info.InputPin;
+		check(InputPin->Direction == EGPD_Input);
 
 		// Create the "Make Literal String" node
 		UK2Node_CallFunction* MakeLiteralStringNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
@@ -442,10 +428,23 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 		UEdGraphPin* ArrayIn = MakeArrayNode->FindPinChecked(MakeArrayNode->GetPinName(ArrayInputIndex++));
 		bIsErrorFree &= Schema->TryCreateConnection(MakeLiteralStringNode->GetReturnValuePin(), ArrayIn);
 
+		FEdGraphPinType PinType = InputPin->PinType;
+		PinType.bIsReference = true;
+		PinType.bIsConst = true;
+
 		// Create variadic pin on setter function
-		UEdGraphPin* ValuePin = CallSetVariadic->CreatePin(EGPD_Input, InputPin->PinType, VariadicPropertyName);
-		ValuePin->PinType.bIsReference = true;
-		ValuePin->PinType.bIsConst = true;
+		UEdGraphPin* ValuePin = CallSetVariadic->CreatePin(EGPD_Input, PinType, VariadicPropertyName);
+
+		if (!InputPin->LinkedTo.Num())
+		{ // create a dummy local input
+			UEdGraphPin* RefPin = UK2Node_CallFunction::InnerHandleAutoCreateRef(Self, ValuePin, CompilerContext, SourceGraph, false);
+			if (RefPin)
+			{
+				RefPin->DefaultValue = InputPin->DefaultValue;
+				RefPin->DefaultObject = InputPin->DefaultObject;
+				RefPin->DefaultTextValue = InputPin->DefaultTextValue;
+			}
+		}
 
 		// Move Capture pin to generated intermediate
 		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
@@ -786,12 +785,12 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
 	{
 		const FName VariadicPropertyName = EAA::Internals::IndexToName(OutputPair.CaptureIndex);
 
-		const auto& PinType = OutputPair.OutputPin->PinType;
+		FEdGraphPinType PinType = OutputPair.OutputPin->PinType;
+		PinType.bIsReference = true;
+		PinType.bIsConst = false;
 
 		// create variadic pin
 		UEdGraphPin* const ValuePin = CallGetVariadic->CreatePin(EGPD_Output, PinType, VariadicPropertyName);
-		ValuePin->PinType.bIsReference = true;
-		ValuePin->PinType.bIsConst = false;
 
 		if (OutputPair.TempVar)
 		{
@@ -827,7 +826,7 @@ FString UK2Node_EnhancedAsyncTaskBase::BuildContextConfigString() const
 
 	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
 	{
-		auto DetectedPinType = EAA::Internals::DeterminePinType(InPin, OutPin);
+		auto DetectedPinType = EAA::Internals::DetermineCommonPinType(InPin, OutPin);
 
 		if (BuilderBase.Len())
 			BuilderBase.Append(TEXT(";"));
@@ -1021,7 +1020,7 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	TArray<FInputPinInfo> CaptureInputs;
 	ForEachCapturePin(EGPD_Input, [&](int32 Index, UEdGraphPin* InputPin)
 	{
-		const bool bInUse = InputPin->LinkedTo.Num() && !EAA::Internals::IsWildcardType(InputPin->PinType);
+		const bool bInUse = !EAA::Internals::IsWildcardType(InputPin->PinType);
 		if (bInUse)
 		{
 			FInputPinInfo& Info = CaptureInputs.AddDefaulted_GetRef();

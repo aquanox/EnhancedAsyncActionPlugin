@@ -262,7 +262,7 @@ bool EAA::Internals::SelectAccessorForType(const FEdGraphPinType& PinType, EAcce
 	return SelectAccessorForType(TypeInfo, AccessType, OutFunction);
 }
 
-FEdGraphPinType EAA::Internals::DeterminePinType(const UEdGraphPin* InputPin, const UEdGraphPin* OutputPin)
+FEdGraphPinType EAA::Internals::DetermineCommonPinType(const UEdGraphPin* InputPin, const UEdGraphPin* OutputPin)
 {
 	auto ExpectedPinType = [](const UEdGraphPin* LocalPin) -> FEdGraphPinType
 	{
@@ -277,8 +277,21 @@ FEdGraphPinType EAA::Internals::DeterminePinType(const UEdGraphPin* InputPin, co
 		}
 	};
 
+	auto WeakCompare = [](const FEdGraphPinType& A, const FEdGraphPinType& B) -> bool
+	{
+		return A.PinCategory == B.PinCategory
+			&& A.PinSubCategory == B.PinSubCategory
+			&& A.PinSubCategoryObject == B.PinSubCategoryObject
+			&& A.PinValueType == B.PinValueType
+			&& A.ContainerType == B.ContainerType;
+	};
+
 	auto InputType = ExpectedPinType(InputPin);
+	InputType.bIsReference = false;
+	InputType.bIsConst = false;
 	auto OutputType = ExpectedPinType(OutputPin);
+	InputType.bIsReference = false;
+	InputType.bIsConst = false;
 
 	FEdGraphPinType NewType = InputType;
 	if (InputType != OutputType)

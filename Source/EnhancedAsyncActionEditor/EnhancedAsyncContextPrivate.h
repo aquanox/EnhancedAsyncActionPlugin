@@ -31,6 +31,22 @@ namespace EAA::Internals
 	 */
 	const FString* FindMetadataHierarchical(const UClass* InClass, const FName& Name);
 
+	static UEdGraphNode::FCreatePinParams MakeConstReference()
+	{
+		UEdGraphNode::FCreatePinParams PinParams;
+		PinParams.bIsConst = true;
+		PinParams.bIsReference = true;
+		return PinParams;
+	}
+
+	static UEdGraphNode::FCreatePinParams MakeMutableReference()
+	{
+		UEdGraphNode::FCreatePinParams PinParams;
+		PinParams.bIsConst = false;
+		PinParams.bIsReference = true;
+		return PinParams;
+	}
+
 	const FEdGraphPinType& GetWildcardType();
 	/**
 	 * Does pin have wildcard type set
@@ -45,12 +61,12 @@ namespace EAA::Internals
 	bool IsCapturableType(const FEdGraphPinType& Type);
 
 	/**
-	 * Determine common pin type for capture pair
+	 * Determine common pin type for capture pair. Dropping const/reference qualifiers
 	 *
 	 * @param InputPin
 	 * @param OutputPin
 	 */
-	FEdGraphPinType DeterminePinType(const UEdGraphPin* InputPin, const UEdGraphPin* OutputPin);
+	FEdGraphPinType DetermineCommonPinType(const UEdGraphPin* InputPin, const UEdGraphPin* OutputPin);
 
 	/**
 	 * Identify property type for the pin

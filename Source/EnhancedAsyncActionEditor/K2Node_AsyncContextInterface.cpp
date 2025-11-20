@@ -76,10 +76,14 @@ void IK2Node_AsyncContextInterface::AddCaptureInternal()
 	auto& Captures = GetMutableCapturesArray();
 	const int32 Index = Captures.Num();
 
+	UEdGraphNode::FCreatePinParams PinParams;
+	PinParams.bIsConst = true;
+	PinParams.bIsReference = true;
+
 	UEdGraphPin* In = GetNodeObject()->CreatePin(EEdGraphPinDirection::EGPD_Input,
 								UEdGraphSchema_K2::PC_Wildcard,
-								GetCapturePinName(Index, EEdGraphPinDirection::EGPD_Input)
-	);
+								GetCapturePinName(Index, EEdGraphPinDirection::EGPD_Input),
+								PinParams);
 	In->SourceIndex = Index;
 	In->bDefaultValueIsIgnored = true;
 	UEdGraphPin* Out = GetNodeObject()->CreatePin(EEdGraphPinDirection::EGPD_Output,
@@ -277,11 +281,14 @@ void IK2Node_AsyncContextInterface::SynchronizeCapturePinType(UEdGraphPin* Input
 {
 	check(InputPin && OutputPin);
 
-	FEdGraphPinType NewType = EAA::Internals::DeterminePinType(InputPin, OutputPin);
+	FEdGraphPinType NewType = EAA::Internals::DetermineCommonPinType(InputPin, OutputPin);
 
 	bool bPinTypeChanged = false;
-	auto ApplyPinType = [&bPinTypeChanged](UEdGraphPin* LocalPin, const FEdGraphPinType& Type)
+	auto ApplyPinType = [&bPinTypeChanged](UEdGraphPin* LocalPin, FEdGraphPinType Type)
 	{
+		Type.bIsReference = LocalPin->Direction == EGPD_Input;
+		Type.bIsConst = LocalPin->Direction == EGPD_Input;
+
 		if (LocalPin->PinType != Type)
 		{
 			LocalPin->PinType = Type;

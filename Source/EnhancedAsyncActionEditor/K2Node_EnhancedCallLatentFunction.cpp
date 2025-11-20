@@ -215,21 +215,6 @@ bool UK2Node_EnhancedCallLatentFunction::ValidateCaptures(const UEdGraphSchema_K
 		return true;
 	});
 
-	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
-	{
-		if (!InputPin->LinkedTo.Num() && OutputPin->LinkedTo.Num())
-		{
-			const FString FormattedMessage = FText::Format(
-				LOCTEXT("EnhancedLatentTaskNoValue", "EnhancedCallLatentFunction: No value assigned for capture index {0} @@"),
-				FText::AsNumber(Index)
-			).ToString();
-			CompilerContext.MessageLog.Error(*FormattedMessage, this);
-			bIsErrorFree = false;
-			return false;
-		}
-		return true;
-	});
-
 	return bIsErrorFree;
 }
 
@@ -377,7 +362,7 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		TArray<FInputPinInfo> CaptureInputs;
 		ForEachCapturePin(EGPD_Input, [&](int32 Index, UEdGraphPin* InputPin)
 		{
-			const bool bInUse = InputPin->LinkedTo.Num() && !EAA::Internals::IsWildcardType(InputPin->PinType);
+			const bool bInUse = /*InputPin->LinkedTo.Num() &&*/ !EAA::Internals::IsWildcardType(InputPin->PinType);
 			if (bInUse)
 			{
 				FInputPinInfo& Info = CaptureInputs.AddDefaulted_GetRef();
