@@ -21,29 +21,50 @@
 		return; \
 	}
 
+#define EAA_CONCAT_IMPL(A, B) A ## B
+#define EAA_CONCAT(A, B) EAA_CONCAT_IMPL(A, B)
+
+#define EAA_DYNAMIC_P(PropertyType, Property, TmpName) \
+	const int32 EAA_CONCAT(TmpName, PropertySize) = Property->GetElementSize() * Property->ArrayDim; \
+	void* EAA_CONCAT(TmpName, StorageSpace) = FMemory_Alloca(EAA_CONCAT(TmpName, PropertySize)); \
+	FMemory::Memzero(EAA_CONCAT(TmpName, StorageSpace), EAA_CONCAT(TmpName, PropertySize)); \
+	InnerProp->InitializeValue(EAA_CONCAT(TmpName, StorageSpace)); \
+	Stack.MostRecentPropertyAddress = nullptr; \
+	Stack.MostRecentPropertyContainer = nullptr; \
+	Stack.StepCompiledIn<PropertyType>(EAA_CONCAT(TmpName, StorageSpace)); \
+	void* TmpName = EAA_CONCAT(TmpName, StorageSpace) ; \
+
 // =================== RESOLVERS ===========================
 
 template<typename T>
 TSharedRef<FEnhancedAsyncActionContext> ResolveContext(const T& Handle) = delete;
 
 template<>
+TSharedRef<FEnhancedAsyncActionContext> ResolveContext(const FAsyncContextHandleBase& Handle)
+{
+	return FEnhancedAsyncContextManager::Get().FindContext(Handle/*.GetId()*/, EResolveErrorMode::Fallback).ToSharedRef();
+}
+
+template<>
 TSharedRef<FEnhancedAsyncActionContext> ResolveContext(const FEnhancedAsyncActionContextHandle& Handle)
 {
-	return FEnhancedAsyncContextManager::Get().FindContext(Handle.GetId(), EResolveErrorMode::Fallback).ToSharedRef();
+	return FEnhancedAsyncContextManager::Get().FindContext(Handle/*.GetId()*/, EResolveErrorMode::Fallback).ToSharedRef();
 }
 
 template<>
 TSharedRef<FEnhancedAsyncActionContext> ResolveContext(const FEnhancedLatentActionContextHandle& Handle)
 {
-	return FEnhancedAsyncContextManager::Get().FindContext(Handle.GetId(), EResolveErrorMode::Fallback).ToSharedRef();
+	return FEnhancedAsyncContextManager::Get().FindContext(Handle/*.GetId()*/, EResolveErrorMode::Fallback).ToSharedRef();
 }
+
+// =================== CORE ===========================
 
 FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::CreateContextForObject(const UObject* Action, FName InDataProperty)
 {
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(Action, InDataProperty);
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Log, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedAsyncActionContextHandle();
 	}
 	return ValueOrError.GetValue();
@@ -51,27 +72,42 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::CreateContextFor
 
 FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate)
 {
-	UE_LOG(LogEnhancedAction, Log, TEXT("CreateLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
+	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
 
 	FLatentCallInfo::FDelegate NativeDelegate;
-	NativeDelegate.BindUFunction(Delegate.GetUObject(), Delegate.GetFunctionName());
+	if (Delegate.IsBound())
+	{
+		NativeDelegate.BindUFunction(Delegate.GetUObject(), Delegate.GetFunctionName());
+	}
 
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(FLatentCallInfo { Owner, UUID, CallUUID, NativeDelegate });
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Log, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedLatentActionContextHandle();
 	}
 	return ValueOrError.GetValue();
 }
 
+FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateEmptyContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate)
+{
+	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateEmptyContextForLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
+
+	FLatentCallInfo::FDelegate NativeDelegate;
+	if (Delegate.IsBound())
+	{
+		NativeDelegate.BindUFunction(Delegate.GetUObject(), Delegate.GetFunctionName());
+	}
+	return FEnhancedLatentActionContextHandle(FLatentCallInfo { Owner, UUID, CallUUID, NativeDelegate });
+}
+
 void UEnhancedAsyncContextLibrary::DestroyContextForLatent(const FEnhancedLatentActionContextHandle& Handle)
 {
-	UE_LOG(LogEnhancedAction, Log, TEXT("DestroyLatentContext %s"), *Handle.GetDebugString());
+	UE_LOG(LogEnhancedAction, Verbose, TEXT("DestroyLatentContext %s"), *Handle.GetDebugString());
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().DestroyContext(Handle.GetId());
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Log, TEXT("DestroyContextForLatent failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Verbose, TEXT("DestroyContextForLatent failed for node: %s"), *ValueOrError.GetError());
 	}
 }
 
@@ -107,7 +143,7 @@ void UEnhancedAsyncContextLibrary::DumpContextForObject(const UObject* Action)
 	}
 }
 
-void UEnhancedAsyncContextLibrary::DumpContext(const FEnhancedAsyncActionContextHandle& Handle)
+void UEnhancedAsyncContextLibrary::DumpContext(const FAsyncContextHandleBase& Handle)
 {
 	auto Context = ResolveContext(Handle);
 	{
@@ -264,6 +300,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Generic)
 	P_GET_PROPERTY(FIntProperty, ParamIndex);
 
 	// Read wildcard Value input.
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FProperty>(nullptr);
@@ -298,6 +335,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Enum)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	uint8 ParamValue = 0;
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FEnumProperty>(&ParamValue);
@@ -323,6 +361,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Struct)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FStructProperty>(nullptr);
@@ -433,6 +472,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Array)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FArrayProperty>(nullptr);
@@ -455,7 +495,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Array)
 
 	const void* ValuePtr = ArrayProperty->ContainerPtrToValuePtr<const void>(ArrayContainerAddr);
 	ensureAlways(ValuePtr == ArrayAddr);
-	ContextSafe->SetValueArray(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
+	ContextSafe->SetValueArray(ParamIndex, ValueType, ValueTypeObject, ArrayAddr);
 	P_NATIVE_END;
 }
 
@@ -469,6 +509,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Set)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FSetProperty>(nullptr);
@@ -478,7 +519,11 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Set)
 	const void* SetContainerAddr = Stack.MostRecentPropertyContainer;
 	P_FINISH;
 
-	EAA_KISMET_ENSURE(SetAddr != nullptr, "Failed to resolve the Value Property for Set Value Set");
+	if (SetProperty == nullptr || SetAddr == nullptr)
+	{
+		Stack.bArrayContextFailed = true;
+		return;
+	}
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncContextManager::Get().FindContext(ParamHandle);
@@ -487,7 +532,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Set)
 
 	const void* ValuePtr = SetProperty->ContainerPtrToValuePtr<const void>(SetContainerAddr);
 	ensureAlways(ValuePtr == SetAddr);
-	ContextSafe->SetValueSet(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
+	ContextSafe->SetValueSet(ParamIndex, ValueType, ValueTypeObject, SetAddr);
 	P_NATIVE_END;
 }
 
@@ -609,6 +654,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Generic)
 	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
 	P_GET_PROPERTY(FIntProperty, ParamIndex);
 
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FProperty>(nullptr);
@@ -646,6 +692,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Enum)
 
 	uint8 ExecResultTemp = 0;
 
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	uint8& ParamValue = Stack.StepCompiledInRef<FEnumProperty, uint8>(&ExecResultTemp);
@@ -671,6 +718,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Struct)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FStructProperty>(nullptr);
@@ -787,6 +835,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Array)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FArrayProperty>(nullptr);
@@ -809,7 +858,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Array)
 
 	void* ValuePtr = ArrayProperty->ContainerPtrToValuePtr<void>(ArrayContainerAddr);
 	ensureAlways(ValuePtr == ArrayAddr);
-	ContextSafe->GetValueArray(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
+	ContextSafe->GetValueArray(ParamIndex, ValueType, ValueTypeObject, ArrayAddr);
 	P_NATIVE_END;
 }
 
@@ -824,6 +873,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Set)
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
+	Stack.MostRecentProperty = nullptr;
 	Stack.MostRecentPropertyAddress = nullptr;
 	Stack.MostRecentPropertyContainer = nullptr;
 	Stack.StepCompiledIn<FSetProperty>(nullptr);
@@ -833,7 +883,11 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Set)
 	void* SetContainerAddr = Stack.MostRecentPropertyContainer;
 	P_FINISH;
 
-	EAA_KISMET_ENSURE(SetProperty != nullptr && SetAddr != nullptr, "Bad property for Get Value Set");
+	if (SetProperty == nullptr || SetAddr == nullptr)
+	{
+		Stack.bArrayContextFailed = true;
+		return;
+	}
 
 	P_NATIVE_BEGIN;
 	auto ContextSafe = FEnhancedAsyncContextManager::Get().FindContext(ParamHandle);
@@ -842,7 +896,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Set)
 
 	void* ValuePtr = SetProperty->ContainerPtrToValuePtr<void>(SetContainerAddr);
 	ensureAlways(ValuePtr == SetAddr);
-	ContextSafe->GetValueSet(ParamIndex, ValueType, ValueTypeObject, ValuePtr);
+	ContextSafe->GetValueSet(ParamIndex, ValueType, ValueTypeObject, SetAddr);
 	P_NATIVE_END;
 }
 

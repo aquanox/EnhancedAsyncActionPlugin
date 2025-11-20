@@ -6,7 +6,7 @@ public class EnhancedAsyncActionEditor : ModuleRules
 {
 	// This is to emulate engine installation and verify includes during development
 	// Gives effect similar to BuildPlugin with -StrictIncludes
-	public bool bStrictIncludesCheck = true;
+	public bool bStrictIncludesCheck = false;
 
 	public EnhancedAsyncActionEditor(ReadOnlyTargetRules Target) : base(Target)
 	{

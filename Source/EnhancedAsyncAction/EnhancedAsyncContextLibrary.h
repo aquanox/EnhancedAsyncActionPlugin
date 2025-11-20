@@ -41,6 +41,14 @@ public:
 	static UE_API FEnhancedLatentActionContextHandle CreateContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate);
 
 	/**
+	 * Create dummy context for latent. Called by UK2Node_EnhancedCallLatentFunction.
+	 *
+	 * @return Context handle
+	 */
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=true))
+	static UE_API FEnhancedLatentActionContextHandle CreateEmptyContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate);
+
+	/**
 	 * Destroy capture context used by latent function. Called by UK2Node_EnhancedCallLatentFunction.
 	 *
 	 * @return Context handle
@@ -94,7 +102,7 @@ public:
 	 * Dump context information to log for debugging purposes
 	 */
 	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Debug", meta=(DevelopmentOnly))
-	static UE_API void DumpContext(const FEnhancedAsyncActionContextHandle& Handle);
+	static UE_API void DumpContext(const FAsyncContextHandleBase& Handle);
 
 	// ========== CASTS =============
 

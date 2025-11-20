@@ -45,7 +45,7 @@ void UK2Node_EnhancedCallLatentFunction::GetMenuActions(FBlueprintActionDatabase
 	for (TObjectIterator<UFunction> It; It; ++It)
 	{
 		UFunction* const Function = *It;
-		if (!EAA::Internals::IsValidLatentCallable(Function))
+		if (!EAA::Internals::IsValidLatentCallable(Function) || !EAA::Switches::bEnableLatents)
 			continue;
 
 		UBlueprintNodeSpawner::FCustomizeNodeDelegate CustomizeNodeDelegate;
@@ -196,6 +196,43 @@ bool UK2Node_EnhancedCallLatentFunction::IsEventMode(UK2Node_CallFunction* Node)
 	return MetaValue != nullptr;
 }
 
+bool UK2Node_EnhancedCallLatentFunction::ValidateCaptures(const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
+{
+	bool bIsErrorFree = true;
+
+	ForEachCapturePin(EGPD_Input, [&](int32 Index, UEdGraphPin* InputPin)
+	{
+		if (InputPin->LinkedTo.Num() && !EAA::Internals::IsCapturableType(InputPin->PinType))
+		{
+			const FString FormattedMessage = FText::Format(
+				LOCTEXT("EnhancedLatentTaskBadInputType", "EnhancedCallLatentFunction: {0} is unsupported type for capture @@"),
+				FText::FromName(InputPin->PinType.PinCategory)
+			).ToString();
+			CompilerContext.MessageLog.Error(*FormattedMessage, this);
+			bIsErrorFree = false;
+			return false;
+		}
+		return true;
+	});
+
+	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InputPin, UEdGraphPin* OutputPin)
+	{
+		if (!InputPin->LinkedTo.Num() && OutputPin->LinkedTo.Num())
+		{
+			const FString FormattedMessage = FText::Format(
+				LOCTEXT("EnhancedLatentTaskNoValue", "EnhancedCallLatentFunction: No value assigned for capture index {0} @@"),
+				FText::AsNumber(Index)
+			).ToString();
+			CompilerContext.MessageLog.Error(*FormattedMessage, this);
+			bIsErrorFree = false;
+			return false;
+		}
+		return true;
+	});
+
+	return bIsErrorFree;
+}
+
 bool UK2Node_EnhancedCallLatentFunction::HandleSetContextDataVariadic(
 	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
     const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
@@ -224,6 +261,11 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		return;
 	}
 
+	if (!ValidateCaptures(Schema, CompilerContext, SourceGraph))
+	{
+		return;
+	}
+
 	UEdGraphPin* LastContextPin = nullptr;
 	if (!GetContextPin(this, LastContextPin))
 	{
@@ -233,7 +275,7 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 	}
 
 	// Toggle repeatable mode
-	const bool bEventMode = IsEventMode(this);
+	const bool bEventMode = IsEventMode(this) && EAA::Switches::bEnableRepeatableLatents;
 	// Toggles Context feature used on this node
 	const bool bContextRequired = AnyCapturePinHasLinks();
 
@@ -246,7 +288,7 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 	   UEdGraphSchema_K2::PC_Struct, NAME_None, FEnhancedLatentActionContextHandle::StaticStruct(),
 	   EPinContainerType::None, FEdGraphTerminalType());
 
-	// CONDITIONAL - create custom event node for retriggerable mode
+	// create custom event node for retriggerable mode
 
 	UK2Node_CustomEvent* OnTriggerCE = nullptr;
 	if (bEventMode)
@@ -271,10 +313,12 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 
 	// call create latent context node
 
-	if (bContextRequired)
 	{
 		auto* CallCreateContext = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
-		CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateContextForLatent)));
+		if (bContextRequired)
+			CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateContextForLatent)));
+		else
+			CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateEmptyContextForLatent)));
 		CallCreateContext->AllocateDefaultPins();
 
 		// Set Owner pin
@@ -296,10 +340,13 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		Schema->TrySetDefaultValue(*CallRandom->FindPinChecked(TEXT("Max"), EGPD_Input), FString::Printf(TEXT("%d"), INT_MAX - 1));
 		bIsErrorFree &= Schema->TryCreateConnection(CallRandom->GetReturnValuePin(), CallCreateContext->FindPinChecked(TEXT("CallUUID"), EGPD_Input));
 
-		// Connect Delegate pin
-		UEdGraphPin* FunctionPin = CallCreateContext->FindPinChecked(TEXT("Delegate"));
-		UEdGraphPin* EventDelegatePin = OnTriggerCE->FindPin(UK2Node_CustomEvent::DelegateOutputName);
-		bIsErrorFree &= FunctionPin && EventDelegatePin && Schema->TryCreateConnection(FunctionPin, EventDelegatePin);
+		if (bEventMode)
+		{
+			// Connect Delegate pin
+			UEdGraphPin* FunctionPin = CallCreateContext->FindPinChecked(TEXT("Delegate"));
+			UEdGraphPin* EventDelegatePin = OnTriggerCE->FindPin(UK2Node_CustomEvent::DelegateOutputName);
+			bIsErrorFree &= FunctionPin && EventDelegatePin && Schema->TryCreateConnection(FunctionPin, EventDelegatePin);
+		}
 
 		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*GetExecPin(), *CallCreateContext->GetExecPin()).CanSafeConnect();
 		LastThenPin = CallCreateContext->GetThenPin();
@@ -308,7 +355,6 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 	}
 
 	// assign context to lvar
-	if (bContextRequired)
 	{
 		auto* AssignNode = CompilerContext.SpawnIntermediateNode<UK2Node_AssignmentStatement>(this, SourceGraph);
 		AssignNode->AllocateDefaultPins();
@@ -365,19 +411,19 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		bIsErrorFree &= Schema->TryCreateConnection(LocalContextVar->GetVariablePin(), InContextPin);
 
 		// connect execs
-		bIsErrorFree &= Schema->TryCreateConnection(LastThenPin, CallLatent->GetExecPin());
+		if (LastThenPin) // simply add to chain after last then
+			bIsErrorFree &= Schema->TryCreateConnection(LastThenPin, CallLatent->GetExecPin());
+		else // this will be the first node - take the outside exec
+			bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*GetExecPin(), *CallLatent->GetExecPin()).CanSafeConnect();
 
+		// Select where READ will happen. In normal mode - from Async Then, In event mode - from CustomEvent Then
 		if (bEventMode)
-		{
 			LastThenPin = OnTriggerCE->GetThenPin();
-		}
 		else
-		{
 			LastThenPin = CallLatent->GetThenPin();
-		}
 	}
 
-	// Select pin to read context handle from
+	// Select where to read context handle from
 	if (bContextRequired && bEventMode)
 	{
 		LastContextPin = OnTriggerCE->FindPinByPredicate([](UEdGraphPin* Pin) -> bool

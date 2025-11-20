@@ -125,8 +125,7 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 	}
 	else if (ContainerType == EPinContainerType::Map)
 	{
-		ensureAlways(false);
-		return FPropertyTypeInfo::Wildcard;
+		return FPropertyTypeInfo::Invalid;
 	}
 	else
 	{

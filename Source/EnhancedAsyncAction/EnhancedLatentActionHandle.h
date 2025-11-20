@@ -51,6 +51,7 @@ struct UE_API FEnhancedLatentActionContextHandle : public FAsyncContextHandleBas
 	GENERATED_BODY()
 public:
 	FEnhancedLatentActionContextHandle();
+	FEnhancedLatentActionContextHandle(FLatentCallInfo CallInfo);
 	FEnhancedLatentActionContextHandle(FAsyncContextId ContextId, FLatentCallInfo CallInfo, TSharedRef<FEnhancedAsyncActionContext> Data);
 
 	/**

@@ -42,6 +42,8 @@ public:
 	using FInputPinInfo = UK2Node_EnhancedAsyncTaskBase::FInputPinInfo;
 	using FOutputPinInfo = UK2Node_EnhancedAsyncTaskBase::FOutputPinInfo;
 
+	bool ValidateCaptures(const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
 	// bool HandleSetContextData(
 	// 	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
 	// 	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);

@@ -10,6 +10,11 @@ FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle()
 {
 }
 
+FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle(FLatentCallInfo InCallInfo)
+	: FAsyncContextHandleBase(FAsyncContextId::Invalid), CallInfo(InCallInfo)
+{
+}
+
 FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle(FAsyncContextId ContextId, FLatentCallInfo InCallInfo, TSharedRef<FEnhancedAsyncActionContext> Data)
 	: FAsyncContextHandleBase(ContextId, InCallInfo.OwningObject, Data), CallInfo(InCallInfo)
 {
