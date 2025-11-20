@@ -84,6 +84,25 @@ void UK2Node_EnhancedCallLatentFunction::GetNodeContextMenuActions(class UToolMe
 
 }
 
+FText UK2Node_EnhancedCallLatentFunction::GetTooltipText() const
+{
+	FFormatNamedArguments Args;
+	Args.Add(TEXT("FunctionTooltip"), Super::GetTooltipText());
+	Args.Add(TEXT("CaptureString"), LOCTEXT("CaptureString", "Capture. This node supports capture context."));
+
+	if (EAA::Switches::bDebugTooltips)
+	{
+		FString Config = BuildContextConfigString();
+		Config.ReplaceInline(TEXT(";"), TEXT("\n"));
+		Args.Add(TEXT("Extra"), FText::FromString(TEXT("\n\n") + Config));
+	}
+	else
+	{
+		Args.Add(TEXT("Extra"), INVTEXT(""));
+	}
+	return FText::Format(LOCTEXT("AsyncTaskTooltip", "{FunctionTooltip}\n\n{CaptureString}{Extra}"), Args);
+}
+
 void UK2Node_EnhancedCallLatentFunction::SetupFromFunction(const UFunction* Function)
 {
 	check(Function);
@@ -218,20 +237,6 @@ bool UK2Node_EnhancedCallLatentFunction::ValidateCaptures(const UEdGraphSchema_K
 	return bIsErrorFree;
 }
 
-bool UK2Node_EnhancedCallLatentFunction::HandleSetContextDataVariadic(
-	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
-    const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
-{
-	return UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(CaptureInputs, InContextHandlePin, InOutLastThenPin, this, Schema, CompilerContext, SourceGraph);
-}
-
-bool UK2Node_EnhancedCallLatentFunction::HandleGetContextDataVariadic(
-	const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
-	const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
-{
-	return UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(CaptureOutputs, ContextHandlePin, InOutLastThenPin, this, Schema, CompilerContext, SourceGraph);
-}
-
 void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
 	const UEdGraphSchema_K2* Schema = CompilerContext.GetSchema();
@@ -303,7 +308,7 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		if (bContextRequired)
 			CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateContextForLatent)));
 		else
-			CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateEmptyContextForLatent)));
+			CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateEmptyHandleForLatent)));
 		CallCreateContext->AllocateDefaultPins();
 
 		// Set Owner pin
@@ -357,12 +362,17 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		LastContextPin = LocalContextVar->GetVariablePin();
 	}
 
+	if (bContextRequired && !EAA::Switches::bVariadicGetSet)
+	{
+		bIsErrorFree &= UK2Node_EnhancedAsyncTaskBase::HandleSetupContext(LastContextPin, LastThenPin, BuildContextConfigString(), this, Schema, CompilerContext, SourceGraph);
+	}
+
 	if (bContextRequired)
 	{ // create set context data variadic
 		TArray<FInputPinInfo> CaptureInputs;
 		ForEachCapturePin(EGPD_Input, [&](int32 Index, UEdGraphPin* InputPin)
 		{
-			const bool bInUse = /*InputPin->LinkedTo.Num() &&*/ !EAA::Internals::IsWildcardType(InputPin->PinType);
+			const bool bInUse = !EAA::Internals::IsWildcardType(InputPin->PinType);
 			if (bInUse)
 			{
 				FInputPinInfo& Info = CaptureInputs.AddDefaulted_GetRef();
@@ -372,7 +382,14 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 			return true;
 		});
 
-		bIsErrorFree &= HandleSetContextDataVariadic(CaptureInputs, LastContextPin, LastThenPin, Schema, CompilerContext, SourceGraph);
+		if (EAA::Switches::bVariadicGetSet)
+		{
+			bIsErrorFree &= UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(CaptureInputs, LastContextPin, LastThenPin, this, Schema, CompilerContext, SourceGraph);
+		}
+		else
+		{
+			bIsErrorFree &= UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(CaptureInputs, LastContextPin, LastThenPin, this, Schema, CompilerContext, SourceGraph);
+		}
 	}
 
 	{ // call real latent function
@@ -438,7 +455,15 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 			}
 			return true;
 		});
-		bIsErrorFree &= HandleGetContextDataVariadic(CaptureOutputs, LastContextPin, LastThenPin, Schema, CompilerContext, SourceGraph);
+
+		if (EAA::Switches::bVariadicGetSet)
+		{
+			bIsErrorFree &= UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(CaptureOutputs, LastContextPin, LastThenPin, this, Schema, CompilerContext, SourceGraph);
+		}
+		else
+		{
+			bIsErrorFree &= UK2Node_EnhancedAsyncTaskBase::HandleGetContextData(CaptureOutputs, LastContextPin, LastThenPin, this, Schema, CompilerContext, SourceGraph);
+		}
 	}
 
 	if (bContextRequired)

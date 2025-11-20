@@ -24,7 +24,7 @@
 #define EAA_CONCAT_IMPL(A, B) A ## B
 #define EAA_CONCAT(A, B) EAA_CONCAT_IMPL(A, B)
 
-#define EAA_DYNAMIC_P(PropertyType, Property, TmpName) \
+#define EAA_P_GET_DYNAMIC(PropertyType, Property, TmpName) \
 	const int32 EAA_CONCAT(TmpName, PropertySize) = Property->GetElementSize() * Property->ArrayDim; \
 	void* EAA_CONCAT(TmpName, StorageSpace) = FMemory_Alloca(EAA_CONCAT(TmpName, PropertySize)); \
 	FMemory::Memzero(EAA_CONCAT(TmpName, StorageSpace), EAA_CONCAT(TmpName, PropertySize)); \
@@ -32,7 +32,14 @@
 	Stack.MostRecentPropertyAddress = nullptr; \
 	Stack.MostRecentPropertyContainer = nullptr; \
 	Stack.StepCompiledIn<PropertyType>(EAA_CONCAT(TmpName, StorageSpace)); \
-	void* TmpName = EAA_CONCAT(TmpName, StorageSpace) ; \
+	void* const TmpName = EAA_CONCAT(TmpName, StorageSpace);
+
+#define EEA_P_GET_HANDLE_PTR(Type, Name) \
+	Stack.MostRecentProperty = nullptr; \
+	Stack.MostRecentPropertyAddress = nullptr; \
+	Stack.StepCompiledIn<FStructProperty>(nullptr); \
+	const FStructProperty* EAA_CONCAT(Name, Prop) = CastField<FStructProperty>(Stack.MostRecentProperty); \
+	Type* const EAA_CONCAT(Name, Ptr) = reinterpret_cast<Type*>(Stack.MostRecentPropertyAddress);
 
 // =================== RESOLVERS ===========================
 
@@ -64,7 +71,7 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::CreateContextFor
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(Action, InDataProperty);
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Error, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedAsyncActionContextHandle();
 	}
 	return ValueOrError.GetValue();
@@ -83,15 +90,15 @@ FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateContextFo
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(FLatentCallInfo { Owner, UUID, CallUUID, NativeDelegate });
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Error, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedLatentActionContextHandle();
 	}
 	return ValueOrError.GetValue();
 }
 
-FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateEmptyContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate)
+FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateEmptyHandleForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate)
 {
-	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateEmptyContextForLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
+	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateEmptyHandleForLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
 
 	FLatentCallInfo::FDelegate NativeDelegate;
 	if (Delegate.IsBound())
@@ -111,7 +118,7 @@ void UEnhancedAsyncContextLibrary::DestroyContextForLatent(const FEnhancedLatent
 	}
 }
 
-void UEnhancedAsyncContextLibrary::SetupContextContainer(const FEnhancedAsyncActionContextHandle& Handle, FString Config)
+void UEnhancedAsyncContextLibrary::SetupContextContainer(const FAsyncContextHandleBase& Handle, const FString& Config)
 {
 	if (!Handle.IsValid())
 	{
@@ -175,47 +182,47 @@ void UEnhancedAsyncContextLibrary::FindCaptureContextForObject(const UObject* Ac
 
 // =================== SETTERS ===========================
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Bool(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const bool& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Bool(const FAsyncContextHandleBase& Handle, int32 Index, const bool& Value)
 {
 	ResolveContext(Handle)->SetValueBool(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Byte(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const uint8& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Byte(const FAsyncContextHandleBase& Handle, int32 Index, const uint8& Value)
 {
 	ResolveContext(Handle)->SetValueByte(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Int32(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Int32(const FAsyncContextHandleBase& Handle, int32 Index, const int32& Value)
 {
 	ResolveContext(Handle)->SetValueInt32(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Int64(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int64& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Int64(const FAsyncContextHandleBase& Handle, int32 Index, const int64& Value)
 {
 	ResolveContext(Handle)->SetValueInt64(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Float(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const float& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Float(const FAsyncContextHandleBase& Handle, int32 Index, const float& Value)
 {
 	ResolveContext(Handle)->SetValueFloat(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Double(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const double& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Double(const FAsyncContextHandleBase& Handle, int32 Index, const double& Value)
 {
 	ResolveContext(Handle)->SetValueDouble(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_String(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FString& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_String(const FAsyncContextHandleBase& Handle, int32 Index, const FString& Value)
 {
 	ResolveContext(Handle)->SetValueString(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Name(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FName& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Name(const FAsyncContextHandleBase& Handle, int32 Index, const FName& Value)
 {
 	ResolveContext(Handle)->SetValueName(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const FText& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Text(const FAsyncContextHandleBase& Handle, int32 Index, const FText& Value)
 {
 	ResolveContext(Handle)->SetValueText(Index, Value);
 }
@@ -289,14 +296,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Variadic)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Generic(const FAsyncContextHandleBase& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Generic)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase, ParamHandle);
 	P_GET_PROPERTY(FIntProperty, ParamIndex);
 
 	// Read wildcard Value input.
@@ -324,7 +331,7 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Generic)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Enum(const FAsyncContextHandleBase& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
 }
@@ -350,14 +357,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Enum)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Struct(const FAsyncContextHandleBase& Handle, int32 Index, const int32& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Struct)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
@@ -377,14 +384,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Struct)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject* Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Object(const FAsyncContextHandleBase& Handle, int32 Index, UObject* Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Object)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_OBJECT(UObject,ParamValue);
 	const FObjectProperty* ParamValueProp = CastField<FObjectProperty>(Stack.MostRecentProperty);
@@ -398,14 +405,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Object)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject> Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_SoftObject(const FAsyncContextHandleBase& Handle, int32 Index, TSoftObjectPtr<UObject> Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_SoftObject)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase, ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_SOFTOBJECT(TSoftObjectPtr<UObject>,ParamValue);
 	const FSoftObjectProperty* ParamValueProp = CastField<FSoftObjectProperty>(Stack.MostRecentProperty);
@@ -419,14 +426,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_SoftObject)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass* Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Class(const FAsyncContextHandleBase& Handle, int32 Index, UClass* Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Class)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_OBJECT(UClass,ParamValue);
 	const FClassProperty* ParamValueProp = CastField<FClassProperty>(Stack.MostRecentProperty);
@@ -440,14 +447,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Class)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject> Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_SoftClass(const FAsyncContextHandleBase& Handle, int32 Index, TSoftClassPtr<UObject> Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_SoftClass)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_SOFTCLASS(TSoftClassPtr<UObject> ,ParamValue);
 	const FSoftClassProperty* ParamValueProp = CastField<FSoftClassProperty>(Stack.MostRecentProperty);
@@ -461,14 +468,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_SoftClass)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TArray<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Array(const FAsyncContextHandleBase& Handle, int32 Index, const TArray<int32>& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Array)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
@@ -499,13 +506,13 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Array)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_SetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, const TSet<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_SetValue_Set(const FAsyncContextHandleBase& Handle, int32 Index, const TSet<int32>& Value)
 {
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Set)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
@@ -538,47 +545,47 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_SetValue_Set)
 
 // ==================== GETTERS =========================
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Bool(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, bool& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Bool(const FAsyncContextHandleBase& Handle, int32 Index, bool& Value)
 {
 	ResolveContext(Handle)->GetValueBool(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Byte(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, uint8& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Byte(const FAsyncContextHandleBase& Handle, int32 Index, uint8& Value)
 {
 	ResolveContext(Handle)->GetValueByte(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Int32(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Int32(const FAsyncContextHandleBase& Handle, int32 Index, int32& Value)
 {
 	ResolveContext(Handle)->GetValueInt32(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Int64(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int64& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Int64(const FAsyncContextHandleBase& Handle, int32 Index, int64& Value)
 {
 	ResolveContext(Handle)->GetValueInt64(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Float(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, float& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Float(const FAsyncContextHandleBase& Handle, int32 Index, float& Value)
 {
 	ResolveContext(Handle)->GetValueFloat(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Double(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, double& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Double(const FAsyncContextHandleBase& Handle, int32 Index, double& Value)
 {
 	ResolveContext(Handle)->GetValueDouble(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_String(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FString& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_String(const FAsyncContextHandleBase& Handle, int32 Index, FString& Value)
 {
 	ResolveContext(Handle)->GetValueString(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Name(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FName& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Name(const FAsyncContextHandleBase& Handle, int32 Index, FName& Value)
 {
 	ResolveContext(Handle)->GetValueName(Index, Value);
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Text(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, FText& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Text(const FAsyncContextHandleBase& Handle, int32 Index, FText& Value)
 {
 	ResolveContext(Handle)->GetValueText(Index, Value);
 }
@@ -644,14 +651,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Variadic)
     P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Generic(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Generic(const FAsyncContextHandleBase& Handle, int32 Index, int32& Value)
 {
 
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Generic)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle, ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase, ParamHandle);
 	P_GET_PROPERTY(FIntProperty, ParamIndex);
 
 	Stack.MostRecentProperty = nullptr;
@@ -680,14 +687,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Generic)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Enum(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Enum(const FAsyncContextHandleBase& Handle, int32 Index, int32& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Enum)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	uint8 ExecResultTemp = 0;
@@ -707,14 +714,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Enum)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Struct(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, int32& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Struct(const FAsyncContextHandleBase& Handle, int32 Index, int32& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Struct)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
@@ -740,14 +747,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Struct)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Object(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UObject*& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Object(const FAsyncContextHandleBase& Handle, int32 Index, UObject*& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Object)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_OBJECT_REF(UObject,ParamValue);
 	const FObjectProperty* ParamValueProp = CastField<FObjectProperty>(Stack.MostRecentProperty);
@@ -761,14 +768,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Object)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_SoftObject(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftObjectPtr<UObject>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_SoftObject(const FAsyncContextHandleBase& Handle, int32 Index, TSoftObjectPtr<UObject>& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_SoftObject)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_SOFTOBJECT_REF(TSoftObjectPtr<UObject>,ParamValue);
 	const FSoftObjectProperty* ParamValueProp = CastField<FSoftObjectProperty>(Stack.MostRecentProperty);
@@ -782,14 +789,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_SoftObject)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Class(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, UClass*& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Class(const FAsyncContextHandleBase& Handle, int32 Index, UClass*& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Class)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_OBJECT_REF(UClass,ParamValue);
 	const FClassProperty* ParamValueProp = CastField<FClassProperty>(Stack.MostRecentProperty);
@@ -803,14 +810,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Class)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_SoftClass(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSoftClassPtr<UObject>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_SoftClass(const FAsyncContextHandleBase& Handle, int32 Index, TSoftClassPtr<UObject>& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_SoftClass)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 	P_GET_SOFTCLASS_REF(TSoftClassPtr<UObject>,ParamValue);
 	const FSoftClassProperty* ParamValueProp = CastField<FSoftClassProperty>(Stack.MostRecentProperty);
@@ -824,14 +831,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_SoftClass)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Array(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TArray<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Array(const FAsyncContextHandleBase& Handle, int32 Index, TArray<int32>& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Array)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.
@@ -862,14 +869,14 @@ DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Array)
 	P_NATIVE_END;
 }
 
-void UEnhancedAsyncContextLibrary::Handle_GetValue_Set(const FEnhancedAsyncActionContextHandle& Handle, int32 Index, TSet<int32>& Value)
+void UEnhancedAsyncContextLibrary::Handle_GetValue_Set(const FAsyncContextHandleBase& Handle, int32 Index, TSet<int32>& Value)
 {
 	checkNoEntry();
 }
 
 DEFINE_FUNCTION(UEnhancedAsyncContextLibrary::execHandle_GetValue_Set)
 {
-	P_GET_STRUCT_REF(FEnhancedAsyncActionContextHandle,ParamHandle);
+	P_GET_STRUCT_REF(FAsyncContextHandleBase,ParamHandle);
 	P_GET_PROPERTY(FIntProperty,ParamIndex);
 
 	// Read wildcard Value input.

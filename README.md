@@ -12,9 +12,7 @@
 
 This plugin is a proof-of-concept experiment to make blueprint async nodes "capture" state of variables prior to call in a friendly way.
 
-Also example on exposing `FInstancedPropertyBag` to blueprint graph (not just details). 
-
-If someone finds this project interesting feel free to send feedback in Discord.
+If anyone finds this project interesting feel free to send feedback in Discord.
 
 ## The Capture Problem
 
@@ -136,7 +134,7 @@ With no limits to amount of data to capture
 
 - Call `ProxyFactory::ProxyFactoryFunction` to create new `ProxyClass` instance
 - Call `CreateContextForObject` to create bound context for the proxy object
-- Possibly Call `SetupContext` to configure context property bag (can be skipped)  
+- Call `SetupContext` to configure context property bag (only for non-vararg mode)
 - For each capture parameter:
   - Call `SetValue` to capture value
 - For each multicast delegate in node:
@@ -171,15 +169,29 @@ With no limits to amount of data to capture
     - Assign value to a created local variable
     - Continue Execution from Event Pin
 
+**Standard Latent Action Flow**
+
+- Call `CreateContextForLatent` to create new context
+- Call `SetupContext` to configure context property bag (only for non-vararg mode)
+- Create local variable for context handle that will be updated by latent action
+- Write Properties one of:
+  - Call `SetValueVariadic` to write captures values to storage (pin per captured property)
+  - Call `SetValue[Type]` to write captures values to storage (one call per captured property)
+- Call latent action function
+- Read Properties one of:
+  - Call `GetValueVariadic` to read captures values from storage (pin per captured property)
+  - Call `GetValue[Type]` to read captures values from storage (one call per captured property)
+- Call `DestroyContext` to free used resources
+- Continue Execution
+
 Context created only if there is at least one capture pin connected.
 
 ## TODOS
 
-- Latent functions support
 - Write some tests
 - Optimize graph updates on actions
-- Improve error handling
-- Better handling of malformed or changed nodes (there are lots of asserts right now)
+- Improve error handling and clear up logging
+- Better handling of malformed or changed nodes (there are lots of asserts for debug purposes right now)
 - Maps support (has to wait for UE 5.8)
 
 ## Unreal Engine Versions

@@ -339,6 +339,27 @@ void IK2Node_AsyncContextInterface::GetStandardPins(EEdGraphPinDirection Dir, TA
 	}
 }
 
+FString IK2Node_AsyncContextInterface::BuildContextConfigString() const
+{
+	FStringBuilderBase BuilderBase;
+
+	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
+	{
+		auto DetectedPinType = EAA::Internals::DetermineCommonPinType(InPin, OutPin);
+
+		if (BuilderBase.Len())
+			BuilderBase.Append(TEXT(";"));
+
+		FPropertyTypeInfo TypeInfo = EAA::Internals::IdentifyPropertyTypeForPin(DetectedPinType);
+		ensureAlways(TypeInfo.IsValid());
+		BuilderBase.Append(FPropertyTypeInfo::EncodeTypeInfo(TypeInfo));
+
+		return true;
+	});
+
+	return BuilderBase.ToString();
+}
+
 void IK2Node_AsyncContextInterface::OrphanCapturePins()
 {
 	// When context is not used by making them execs can make base implementation ignore them as they will be not a "Data pins" :D

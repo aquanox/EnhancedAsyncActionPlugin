@@ -35,6 +35,7 @@ UCLASS(MinimalAPI, Config=Engine, DefaultConfig, DisplayName="Enhanced Async Act
 class UEnhancedAsyncContextSettings : public UDeveloperSettings
 {
 	GENERATED_BODY()
+
 public:
 	UE_API static const UEnhancedAsyncContextSettings* Get();
 
@@ -54,7 +55,6 @@ private:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category=General, meta=(ConfigRestartRequired=true))
 	TArray<FExternalAsyncActionSpec> ExternalAsyncActions;
-
 };
 
 #undef UE_API

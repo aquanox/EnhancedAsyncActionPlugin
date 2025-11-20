@@ -9,9 +9,10 @@
 
 #define UE_API ENHANCEDASYNCACTION_API
 
-class FEnhancedAsyncContextManager;
+// Experiment with packed identifier - reserve two lowest bits for handle type
+#define WITH_CONTEXT_TYPE_TAG 0
+
 struct FEnhancedAsyncActionContext;
-struct FInstancedPropertyBag;
 
 /**
  * Handling mode of context resolve errors
@@ -28,8 +29,9 @@ enum class EResolveErrorMode
  */
 struct UE_API FAsyncContextId
 {
-	friend FEnhancedAsyncContextManager;
-
+	static constexpr uint32 InvalidValue = static_cast<uint32>(INDEX_NONE);
+public:
+#if WITH_CONTEXT_TYPE_TAG
 	enum EContextType : uint32
 	{
 		CT_Unknown = 0,
@@ -39,28 +41,29 @@ struct UE_API FAsyncContextId
 		CT_SHIFT = 2,
 		CT_MASK = 1 << CT_SHIFT
 	};
-private:
-	uint32 Value;
-	// EContextType Type = EContextType::CT_Unknown;
-public:
-	static const FAsyncContextId Invalid;
+#endif
 
-	FAsyncContextId() : Value(INDEX_NONE)
+#if WITH_CONTEXT_TYPE_TAG
+	explicit FAsyncContextId(uint32 InValue = InvalidValue, EContextType InType = EContextType::CT_Unknown) : Value(InValue)
 	{
+		Value = (InValue << CT_SHIFT) | (uint32)InType;
 	}
-	FAsyncContextId(uint32 InValue, EContextType InType) : Value(InValue)
-	{
-		// Value = (InValue << CT_SHIFT) | InType;
-	}
+#else
+	explicit FAsyncContextId(uint32 InValue = InvalidValue) : Value(InValue) {}
+#endif
 
 	bool operator<(const FAsyncContextId& Other) const { return Value < Other.Value; }
 	bool operator==(const FAsyncContextId& Other) const { return Value == Other.Value; }
 	bool operator!=(const FAsyncContextId& Other) const { return !operator==(Other); }
 
-	explicit operator bool() const { return Value != INDEX_NONE; }
+	explicit operator bool() const { return Value != InvalidValue; }
 	explicit operator uint32() const { return Value; }
 
+	bool IsValid() const { return Value != InvalidValue; }
+
+#if WITH_CONTEXT_TYPE_TAG
 	bool IsA(EContextType InType) const { return (Value & CT_MASK) == InType; }
+#endif
 
 	friend uint32 GetTypeHash(const FAsyncContextId& Id)
 	{
@@ -72,6 +75,17 @@ public:
 	 */
 	template<typename T>
 	static FAsyncContextId Make(T const&) = delete;
+
+private:
+	friend class FEnhancedAsyncContextManager;
+
+	// The unique context identifier value
+	uint32 Value;
+
+#if WITH_CONTEXT_TYPE_TAG
+	// The handle type
+	EContextType Type = EContextType::CT_Unknown;
+#endif
 };
 
 /**
@@ -81,8 +95,6 @@ USTRUCT(BlueprintType)
 struct UE_API FAsyncContextHandleBase
 {
 	GENERATED_BODY()
-private:
-	friend FEnhancedAsyncContextManager;
 public:
 	FAsyncContextHandleBase() = default; // for bp use
 	explicit FAsyncContextHandleBase(const FAsyncContextId& Id);
@@ -99,6 +111,8 @@ public:
 		return FString::Printf(TEXT("Id=%x Owner=%s"), (uint32)GetId(), *GetNameSafe(Owner.GetEvenIfUnreachable()));
 	}
 protected:
+	friend class FEnhancedAsyncContextManager;
+
 	FAsyncContextId ContextId;
 	TWeakObjectPtr<const UObject> Owner;
 	TWeakPtr<FEnhancedAsyncActionContext> Data;

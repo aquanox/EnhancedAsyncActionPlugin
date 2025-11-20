@@ -607,45 +607,6 @@ void FEnhancedAsyncActionContext_PropertyBagBase::GetValueSet(int32 Index, EProp
 // ============ GENERICS ==============
 // ======================================
 
-static bool IsContainerProperty(const FProperty* Property)
-{
-	return CastField<FArrayProperty>(Property)
-		|| CastField<FSetProperty>(Property)
-		|| CastField<FMapProperty>(Property);
-}
-
-bool CanCastTo(const UStruct* From, const UStruct* To)
-{
-	return From != nullptr && To != nullptr && From->IsChildOf(To);
-}
-
-static bool IsCompatibleType(const FPropertyBagPropertyDesc* Descriptor, const FProperty* Property)
-{
-	auto ContainerType = EAA::Internals::GetContainerTypeFromProperty(Property);
-	if (ContainerType != Descriptor->ContainerTypes.GetFirstContainerType())
-		return false;
-
-	auto ValueType = EAA::Internals::GetValueTypeFromProperty(Property);
-	if (ValueType != Descriptor->ValueType)
-		return false;
-
-	auto ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(Property);
-
-	if (ValueType == EPropertyBagPropertyType::Enum || ValueType == EPropertyBagPropertyType::Struct)
-	{
-		return ValueTypeObject == Descriptor->ValueTypeObject;
-	}
-
-	if (ValueType == EPropertyBagPropertyType::Object)
-	{
-		const UClass* ObjectClass = Cast<const UClass>(ValueTypeObject);
-		const UClass* DescriptorObjectClass = Cast<const UClass>(Descriptor->ValueTypeObject);
-		return CanCastTo(ObjectClass, DescriptorObjectClass);
-	}
-
-	return true;
-}
-
 bool FEnhancedAsyncActionContext_PropertyBagBase::SetValueByName(FName Name, const FProperty* Property, const void* Value, FString& Message)
 {
 	if (!Property || Name.IsNone() || !Value)
@@ -669,7 +630,7 @@ bool FEnhancedAsyncActionContext_PropertyBagBase::SetValueByName(FName Name, con
 		Message = TEXT("Unknown context property");
 		return false;
 	}
-	if (!IsCompatibleType(ContextProperty, Property))
+	if (!EAA::Internals::IsCompatibleWithProperty(EAA::Internals::EAccessorRole::SETTER, ContextProperty, Property))
 	{
 		Message = TEXT("Incompatible type");
 		return false;
@@ -699,7 +660,7 @@ bool FEnhancedAsyncActionContext_PropertyBagBase::GetValueByName(FName Name, con
 		Message = TEXT("Unknown context property");
 		return false;
 	}
-	if (!ContextProperty->CompatibleType(FPropertyBagPropertyDesc(Name, Property)))
+	if (!EAA::Internals::IsCompatibleWithProperty(EAA::Internals::EAccessorRole::GETTER, ContextProperty, Property))
 	{
 		Message = TEXT("Incompatible type");
 		return false;

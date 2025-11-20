@@ -326,6 +326,54 @@ bool UK2Node_EnhancedAsyncTaskBase::ValidateCaptures(const UEdGraphSchema_K2* Sc
 	return bIsErrorFree;
 }
 
+bool UK2Node_EnhancedAsyncTaskBase::HandleSetupContext(
+	UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin, FString Config,
+	UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
+{
+	bool bIsErrorFree = true;
+
+	// Create Make Literal String function
+	UK2Node_CallFunction* const CallMakeLiteral = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
+	CallMakeLiteral->FunctionReference.SetExternalMember(
+		GET_MEMBER_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
+		UKismetSystemLibrary::StaticClass()
+	);
+	CallMakeLiteral->AllocateDefaultPins();
+
+	auto LiteralValuePin = CallMakeLiteral->FindPinChecked(TEXT("Value"), EGPD_Input);
+	LiteralValuePin->DefaultValue = Config;
+
+	// Create a call to context setup
+	UK2Node_CallFunction* const CallSetupNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
+	CallSetupNode->FunctionReference.SetExternalMember(
+		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, SetupContextContainer),
+		UEnhancedAsyncContextLibrary::StaticClass()
+	);
+	CallSetupNode->AllocateDefaultPins();
+
+	UEdGraphPin* HandlePin = CallSetupNode->FindPinChecked(EAA::Internals::PIN_Handle);
+	if (!Schema->CanCreateConnection(InContextHandlePin, HandlePin).CanSafeConnect())
+	{
+		bIsErrorFree &= Schema->CreateAutomaticConversionNodeAndConnections(InContextHandlePin, HandlePin);
+	}
+	else
+	{
+		bIsErrorFree &= Schema->TryCreateConnection(InContextHandlePin, HandlePin);
+	}
+	CallSetupNode->NotifyPinConnectionListChanged(HandlePin);
+
+	// Set config value
+	UEdGraphPin* ConfigPin = CallSetupNode->FindPinChecked(TEXT("Config"));
+	// Schema->TrySetDefaultValue(*ConfigPin, CapturesConfigString);
+	bIsErrorFree &= Schema->TryCreateConnection(CallMakeLiteral->GetReturnValuePin(), ConfigPin);
+
+	// Connect [CreateContext] and [SetupContext]
+	bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallSetupNode->GetExecPin());
+	InOutLastThenPin = CallSetupNode->GetThenPin();
+
+	return bIsErrorFree;
+}
+
 bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
 	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
 	UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
@@ -367,15 +415,34 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
 
 		// match function inputs, to pass data to function from CallFunction node
 
+		// Set the handle parameter
 		UEdGraphPin* HandlePin = CallNode->FindPinChecked(EAA::Internals::PIN_Handle);
-		bIsErrorFree &=  Schema->TryCreateConnection(InContextHandlePin, HandlePin);
+		if (!Schema->CanCreateConnection(InContextHandlePin, HandlePin).CanSafeConnect())
+		{
+			bIsErrorFree &= Schema->CreateAutomaticConversionNodeAndConnections(InContextHandlePin, HandlePin);
+		}
+		else
+		{
+			bIsErrorFree &= Schema->TryCreateConnection(InContextHandlePin, HandlePin);
+		}
+		CallNode->NotifyPinConnectionListChanged(HandlePin);
 
 		UEdGraphPin* IndexPin = CallNode->FindPinChecked(EAA::Internals::PIN_Index);
 		Schema->TrySetDefaultValue(*IndexPin, FString::Printf(TEXT("%d"), Info.CaptureIndex));
 
 		UEdGraphPin* ValuePin = CallNode->FindPinChecked(EAA::Internals::PIN_Value);
-		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
-		CallNode->PinConnectionListChanged(ValuePin);
+
+		if (!InputPin->LinkedTo.Num())
+		{ // create a dummy local input
+			ValuePin->PinType = InputPin->PinType;
+			ValuePin->PinType.bIsReference = true;
+			UK2Node_CallFunction::InnerHandleAutoCreateRef(Self, ValuePin, CompilerContext, SourceGraph, false);
+		}
+		else
+		{ // take link from outside
+			bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
+		}
+		CallNode->NotifyPinConnectionListChanged(ValuePin);
 
 		// Connect [Last] and [Set]
 		bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallNode->GetExecPin());
@@ -437,17 +504,13 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 
 		if (!InputPin->LinkedTo.Num())
 		{ // create a dummy local input
-			UEdGraphPin* RefPin = UK2Node_CallFunction::InnerHandleAutoCreateRef(Self, ValuePin, CompilerContext, SourceGraph, false);
-			if (RefPin)
-			{
-				RefPin->DefaultValue = InputPin->DefaultValue;
-				RefPin->DefaultObject = InputPin->DefaultObject;
-				RefPin->DefaultTextValue = InputPin->DefaultTextValue;
-			}
+			UK2Node_CallFunction::InnerHandleAutoCreateRef(Self, ValuePin, CompilerContext, SourceGraph, false);
+		}
+		else
+		{ // Move Capture pin to generated intermediate
+			bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
 		}
 
-		// Move Capture pin to generated intermediate
-		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
 		CallSetVariadic->NotifyPinConnectionListChanged(ValuePin);
 	}
 
@@ -700,8 +763,18 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextData(
 		UK2Node_AssignmentStatement* AssignNode = CompilerContext.SpawnIntermediateNode<UK2Node_AssignmentStatement>(Self, SourceGraph);
 		AssignNode->AllocateDefaultPins();
 
-		// handle
-		bIsErrorFree &= Schema->TryCreateConnection(CallReadNode->FindPinChecked(EAA::Internals::PIN_Handle), ContextHandlePin);
+		// Set the handle parameter
+		UEdGraphPin* HandlePin = CallReadNode->FindPinChecked(EAA::Internals::PIN_Handle);
+		if (!Schema->CanCreateConnection(ContextHandlePin, HandlePin).CanSafeConnect())
+		{
+			bIsErrorFree &= Schema->CreateAutomaticConversionNodeAndConnections(ContextHandlePin, HandlePin);
+		}
+		else
+		{
+			bIsErrorFree &= Schema->TryCreateConnection(ContextHandlePin, HandlePin);
+		}
+		CallReadNode->NotifyPinConnectionListChanged(HandlePin);
+
 		// index
 		Schema->TrySetDefaultValue(*CallReadNode->FindPinChecked(EAA::Internals::PIN_Index), FString::Printf(TEXT("%d"), OutputPair.CaptureIndex));
 		// value
@@ -818,27 +891,6 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
 	}
 
 	return bIsErrorFree;
-}
-
-FString UK2Node_EnhancedAsyncTaskBase::BuildContextConfigString() const
-{
-	FStringBuilderBase BuilderBase;
-
-	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
-	{
-		auto DetectedPinType = EAA::Internals::DetermineCommonPinType(InPin, OutPin);
-
-		if (BuilderBase.Len())
-			BuilderBase.Append(TEXT(";"));
-
-		FPropertyTypeInfo TypeInfo = EAA::Internals::IdentifyPropertyTypeForPin(DetectedPinType);
-		ensureAlways(TypeInfo.IsValid());
-		BuilderBase.Append(FPropertyTypeInfo::EncodeTypeInfo(TypeInfo));
-
-		return true;
-	});
-
-	return BuilderBase.ToString();
 }
 
 bool UK2Node_EnhancedAsyncTaskBase::HandleInvokeActivate(
@@ -986,35 +1038,7 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 
 	if (bContextSetupRequired)
 	{
-		// Create Make Literal String function
-		UK2Node_CallFunction* const CallMakeLiteral = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
-		CallMakeLiteral->FunctionReference.SetExternalMember(
-			GET_MEMBER_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
-			UKismetSystemLibrary::StaticClass()
-		);
-		CallMakeLiteral->AllocateDefaultPins();
-
-		auto LiteralValuePin = CallMakeLiteral->FindPinChecked(TEXT("Value"), EGPD_Input);
-		LiteralValuePin->DefaultValue = BuildContextConfigString();
-
-		// Create a call to context setup
-		UK2Node_CallFunction* const CallSetupCaptureNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
-		CallSetupCaptureNode->FunctionReference.SetExternalMember(
-			GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, SetupContextContainer),
-			UEnhancedAsyncContextLibrary::StaticClass()
-		);
-		CallSetupCaptureNode->AllocateDefaultPins();
-
-		bIsErrorFree &= Schema->TryCreateConnection(CaptureContextHandlePin, CallSetupCaptureNode->FindPinChecked(EAA::Internals::PIN_Handle));
-
-		// Set config value
-		UEdGraphPin* ConfigPin = CallSetupCaptureNode->FindPinChecked(TEXT("Config"));
-		// Schema->TrySetDefaultValue(*ConfigPin, CapturesConfigString);
-		bIsErrorFree &= Schema->TryCreateConnection(CallMakeLiteral->GetReturnValuePin(), ConfigPin);
-
-		// Connect [CreateContext] and [SetupContext]
-		bIsErrorFree &= Schema->TryCreateConnection(LastThenPin, CallSetupCaptureNode->GetExecPin());
-		LastThenPin = CallSetupCaptureNode->GetThenPin();
+		HandleSetupContext(CaptureContextHandlePin, LastThenPin, BuildContextConfigString(), this, Schema, CompilerContext, SourceGraph);
 	}
 
 	TArray<FInputPinInfo> CaptureInputs;

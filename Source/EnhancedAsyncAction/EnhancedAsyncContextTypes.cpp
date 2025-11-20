@@ -2,6 +2,7 @@
 
 #include "EnhancedAsyncContextTypes.h"
 #include "StructUtils/PropertyBag.h"
+#include "StructUtils/StructUtilsTypes.h"
 #include "UObject/TextProperty.h"
 #include "EnhancedAsyncContextLibrary.h"
 
@@ -25,6 +26,34 @@ bool FPropertyTypeInfo::IsValid() const
 bool FPropertyTypeInfo::IsSupported() const
 {
 	return IsValid() && EAA::Internals::HasAccessorForType(*this);
+}
+
+bool FPropertyTypeInfo::IsCompatibleWith(const FPropertyTypeInfo& Other) const
+{
+	// Containers must match
+	if (ContainerType != Other.ContainerType)
+		return false;
+
+	// Values must match.
+	if (ValueType != Other.ValueType)
+		return false;
+
+	// Struct and enum must have same value type class
+	if (ValueType == EPropertyBagPropertyType::Enum || ValueType == EPropertyBagPropertyType::Struct)
+	{
+		return ValueTypeObject == Other.ValueTypeObject;
+	}
+
+	// Objects should be castable.
+	if (ValueType == EPropertyBagPropertyType::Object)
+	{
+		const UClass* ObjectClass = Cast<const UClass>(ValueTypeObject);
+		const UClass* OtherObjectClass = Cast<const UClass>(Other.ValueTypeObject);
+
+		return ObjectClass && OtherObjectClass && ObjectClass->IsChildOf(OtherObjectClass);
+	}
+
+	return true;
 }
 
 FString FPropertyTypeInfo::EncodeTypeInfo(const FPropertyTypeInfo& TypeInfo)
@@ -140,6 +169,13 @@ FPropertyTypeInfo::FPropertyTypeInfo(const FProperty* ExistingProperty)
 		ValueTypeObject = EAA::Internals::GetValueTypeObjectFromProperty(ExistingProperty);
 		KeyType = EPropertyBagPropertyType::None;
 	}
+}
+
+FPropertyTypeInfo::FPropertyTypeInfo(const FPropertyBagPropertyDesc* ExistingProperty)
+	: ContainerType(ExistingProperty->ContainerTypes.GetFirstContainerType())
+	, ValueType(ExistingProperty->ValueType), ValueTypeObject(ExistingProperty->ValueTypeObject)
+	, KeyType(EPropertyBagPropertyType::None)
+{
 }
 
 FPropertyTypeInfo::FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object)
@@ -372,9 +408,8 @@ EPropertyBagPropertyType EAA::Internals::GetValueTypeFromProperty(const FPropert
 
 	// Handle map property
 	if (const FMapProperty* MapProperty = CastField<FMapProperty>(InSourceProperty))
-	{
-		checkNoEntry(); // there is no single type for it
-		return EPropertyBagPropertyType::None;
+	{ // todo: maps support in 5.8
+		return EPropertyBagPropertyType::Count;
 	}
 
 	return EPropertyBagPropertyType::None;
@@ -426,10 +461,38 @@ UObject* EAA::Internals::GetValueTypeObjectFromProperty(const FProperty* InSourc
 
 	// Handle map property
 	if (const FMapProperty* MapProperty = CastField<FMapProperty>(InSourceProperty))
-	{
-		checkNoEntry(); // there is no single type object for it
+	{ // todo: maps support in 5.8
 		return nullptr;
 	}
 
 	return nullptr;
+}
+
+bool EAA::Internals::IsContainerProperty(const FProperty* Property)
+{
+	return CastField<FArrayProperty>(Property)
+		|| CastField<FSetProperty>(Property)
+		|| CastField<FMapProperty>(Property);
+}
+
+bool EAA::Internals::IsCompatibleWithProperty(EAccessorRole Role, const FPropertyBagPropertyDesc* Descriptor, const FProperty* Property)
+{
+	check(Descriptor && Property);
+
+	// if (Descriptor->Name == Property->GetFName())
+		// return true;
+
+	// This is broken in 5.5
+	// return Descriptor->CompatibleType(FPropertyBagPropertyDesc(NAME_None, Property));
+
+	FPropertyTypeInfo DescInfo(Descriptor);
+	FPropertyTypeInfo PropInfo(Property);
+	if (Role == EAccessorRole::SETTER)
+	{
+		return DescInfo.IsCompatibleWith(PropInfo);
+	}
+	else
+	{
+		return PropInfo.IsCompatibleWith(DescInfo);
+	}
 }

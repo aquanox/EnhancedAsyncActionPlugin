@@ -1,10 +1,12 @@
-﻿#include "EnhancedAsyncActionHandle.h"
+﻿// Copyright 2025, Aquanox.
+
+#include "EnhancedAsyncActionHandle.h"
 #include "EnhancedAsyncContextManager.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedAsyncActionHandle)
 
 FEnhancedAsyncActionContextHandle::FEnhancedAsyncActionContextHandle()
-	: FAsyncContextHandleBase(FAsyncContextId::Invalid)
+	: FAsyncContextHandleBase(FAsyncContextId(FAsyncContextId::InvalidValue))
 {
 }
 

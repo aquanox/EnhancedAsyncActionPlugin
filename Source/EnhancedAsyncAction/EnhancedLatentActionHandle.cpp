@@ -6,12 +6,12 @@
 #include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedLatentActionHandle)
 
 FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle()
-	: FAsyncContextHandleBase(FAsyncContextId::Invalid)
+	: FAsyncContextHandleBase(FAsyncContextId(FAsyncContextId::InvalidValue))
 {
 }
 
 FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle(FLatentCallInfo InCallInfo)
-	: FAsyncContextHandleBase(FAsyncContextId::Invalid), CallInfo(InCallInfo)
+	: FAsyncContextHandleBase(FAsyncContextId(FAsyncContextId::InvalidValue)), CallInfo(InCallInfo)
 {
 }
 
@@ -22,7 +22,7 @@ FEnhancedLatentActionContextHandle::FEnhancedLatentActionContextHandle(FAsyncCon
 
 bool FEnhancedLatentActionContextHandle::IsValid() const
 {
-	return FAsyncContextHandleBase::IsValid() && CallInfo.UUID != 0 && CallInfo.CallID != 0;
+	return Super::IsValid() && CallInfo.UUID != 0 && CallInfo.CallID != 0;
 }
 
 void FEnhancedLatentActionContextHandle::ReleaseContext() const

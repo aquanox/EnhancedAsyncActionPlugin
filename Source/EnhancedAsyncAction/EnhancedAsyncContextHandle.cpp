@@ -3,8 +3,6 @@
 #include "EnhancedAsyncContextHandle.h"
 #include "EnhancedAsyncContextManager.h"
 
-const FAsyncContextId FAsyncContextId::Invalid;
-
 FAsyncContextHandleBase::FAsyncContextHandleBase(const FAsyncContextId& Id)
 	: ContextId(Id)
 {

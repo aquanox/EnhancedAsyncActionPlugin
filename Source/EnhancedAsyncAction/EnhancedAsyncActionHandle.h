@@ -14,6 +14,7 @@ USTRUCT(BlueprintType, meta=(DisableSplitPin))
 struct UE_API FEnhancedAsyncActionContextHandle : public FAsyncContextHandleBase
 {
 	GENERATED_BODY()
+
 public:
 	FEnhancedAsyncActionContextHandle();
 	FEnhancedAsyncActionContextHandle(FAsyncContextId ContextId, TWeakObjectPtr<const UObject> Owner, TSharedRef<FEnhancedAsyncActionContext> Data);
@@ -24,7 +25,7 @@ public:
 	TSharedRef<FEnhancedAsyncActionContext> GetContextSafe() const;
 };
 
-template<>
+template <>
 struct TStructOpsTypeTraits<FEnhancedAsyncActionContextHandle>
 	: public TStructOpsTypeTraitsBase2<FEnhancedAsyncActionContextHandle>
 {
@@ -34,10 +35,14 @@ struct TStructOpsTypeTraits<FEnhancedAsyncActionContextHandle>
 	};
 };
 
-template<>
+template <>
 inline FAsyncContextId FAsyncContextId::Make(const UObject* const& InObject)
 {
+#if WITH_CONTEXT_TYPE_TAG
 	return FAsyncContextId( ::PointerHash(InObject, INDEX_NONE), FAsyncContextId::EContextType::CT_AsyncAction );
+#else
+	return FAsyncContextId(::PointerHash(InObject, INDEX_NONE));
+#endif
 }
 
 #undef UE_API

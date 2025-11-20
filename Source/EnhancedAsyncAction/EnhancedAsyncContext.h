@@ -27,8 +27,7 @@
 	virtual void SetValue ##Name(int32 Index, UClass* ExpectedMetaClass, UClass* const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void GetValue ##Name(int32 Index, UClass* ExpectedMetaClass, UClass*& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void SetValueSoft ##Name(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject> const& InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-	virtual void GetValueSoft ##Name(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject>& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
-
+	virtual void GetValueSoft ##Name(int32 Index, UClass* ExpectedMetaClass, TSoftClassPtr<UObject>& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
 #define CONTEXT_DECLARE_STRUCT_ACCESSOR(Name) \
 	virtual void SetValue ##Name(int32 Index, UScriptStruct* ExpectedType, const uint8* InValue) CONTEXT_PROPERTY_ACCESSOR_MODE; \
 	virtual void GetValue ##Name(int32 Index, UScriptStruct* ExpectedType, const uint8*& OutValue) CONTEXT_PROPERTY_ACCESSOR_MODE;
@@ -85,6 +84,7 @@ struct UE_API FEnhancedAsyncActionContext
 
 	bool CanAddReferencedObjects() const { return bAddReferencedObjectsAllowed; }
 	bool CanSetupContext() const { return bSetupContextAllowed; }
+
 protected:
 	bool bAddReferencedObjectsAllowed = true;
 	bool bSetupContextAllowed = true;

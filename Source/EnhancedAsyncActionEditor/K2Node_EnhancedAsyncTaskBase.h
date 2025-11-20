@@ -66,6 +66,10 @@ public:
 	bool ValidateCaptures(
 	    const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
+	static bool HandleSetupContext(
+		UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin, FString Config,
+		UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
+
 	static bool HandleSetContextData(
 		const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
 		UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
@@ -90,7 +94,7 @@ public:
 		const TArray<FOutputPinInfo>& CaptureOutputs, UEdGraphPin* ContextHandlePin, UEdGraphPin*& InOutLastThenPin,
 		UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph);
 
-	FString BuildContextConfigString() const;
+
 
 	virtual void ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph) override;
 

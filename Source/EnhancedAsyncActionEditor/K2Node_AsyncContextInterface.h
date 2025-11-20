@@ -122,6 +122,8 @@ public:
 	void OrphanCapturePins();
 
 	void GetStandardPins(EEdGraphPinDirection Dir, TArray<UEdGraphPin*> &OutPins) const;
+
+	FString BuildContextConfigString() const;
 };
 
 /**

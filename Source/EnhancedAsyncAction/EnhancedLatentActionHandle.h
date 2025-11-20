@@ -49,6 +49,7 @@ USTRUCT(BlueprintType)
 struct UE_API FEnhancedLatentActionContextHandle : public FAsyncContextHandleBase
 {
 	GENERATED_BODY()
+
 public:
 	FEnhancedLatentActionContextHandle();
 	FEnhancedLatentActionContextHandle(FLatentCallInfo CallInfo);
@@ -63,7 +64,7 @@ public:
 
 	FString GetDebugString() const
 	{
-		return FString::Printf(TEXT("%x %s"), (uint32)GetId(), *CallInfo.GetDebugString());
+		return FString::Printf(TEXT("Id=%x %s"), (uint32)GetId(), *CallInfo.GetDebugString());
 	}
 
 	/** Shortcut to resolve context from manager */
@@ -83,9 +84,9 @@ public:
 protected:
 	friend class FEnhancedAsyncContextManager;
 
-	template<typename>
+	template <typename>
 	friend class TEnhancedLatentAction;
-	template<typename>
+	template <typename>
 	friend class TEnhancedRepeatableLatentAction;
 
 	// Latent function call unique identifier that can be obtained from outside
@@ -94,7 +95,7 @@ protected:
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FEnhancedLatentActionDelegate, const FEnhancedLatentActionContextHandle&, Handle);
 
-template<>
+template <>
 struct TStructOpsTypeTraits<FEnhancedLatentActionContextHandle>
 	: public TStructOpsTypeTraitsBase2<FEnhancedLatentActionContextHandle>
 {
@@ -111,13 +112,14 @@ struct TStructOpsTypeTraits<FEnhancedLatentActionContextHandle>
  *
  * @tparam TLatentBase Base class of latent action
  */
-template<typename TLatentBase = FPendingLatentAction>
+template <typename TLatentBase = FPendingLatentAction>
 class TEnhancedLatentAction : public TLatentBase
 {
 	using Super = TLatentBase;
 	using ThisClass = TEnhancedLatentAction;
+
 public:
-	template<typename ... TArgs>
+	template <typename... TArgs>
 	TEnhancedLatentAction(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
 		: Super(Forward<TArgs>(Args)...), SavedContextHandle(Handle), ContextHandleRef(const_cast<FEnhancedLatentActionContextHandle&>(Handle))
 	{
@@ -128,7 +130,7 @@ public:
 
 	virtual void UpdateOperation(FLatentResponse& Response) override
 	{
-		UE_LOG(LogEnhancedAction, Log, TEXT("%p UPDATE %s"), this, *SavedContextHandle.GetDebugString());
+		UE_LOG(LogEnhancedAction, Verbose, TEXT("%p UPDATE %s"), this, *SavedContextHandle.GetDebugString());
 
 		const int32 InitialCount = CountResponses(Response);
 
@@ -146,7 +148,7 @@ public:
 
 	virtual void NotifyActionTriggered()
 	{
-		UE_LOG(LogEnhancedAction, Log, TEXT("%p SELECT %s"), this, *SavedContextHandle.GetDebugString());
+		UE_LOG(LogEnhancedAction, Verbose, TEXT("%p SELECT %s"), this, *SavedContextHandle.GetDebugString());
 
 		// Switch to context
 		ContextHandleRef = SavedContextHandle;
@@ -154,7 +156,7 @@ public:
 
 	virtual void NotifyObjectDestroyed()
 	{
-		UE_LOG(LogEnhancedAction, Log, TEXT("%p DESTROY %s"), this, *SavedContextHandle.GetDebugString());
+		UE_LOG(LogEnhancedAction, Verbose, TEXT("%p DESTROY %s"), this, *SavedContextHandle.GetDebugString());
 
 		SavedContextHandle.ReleaseContextAndInvalidate();
 		Super::NotifyObjectDestroyed();
@@ -162,7 +164,7 @@ public:
 
 	virtual void NotifyActionAborted()
 	{
-		UE_LOG(LogEnhancedAction, Log, TEXT("%p ABORT %s"),this, *SavedContextHandle.GetDebugString());
+		UE_LOG(LogEnhancedAction, Verbose, TEXT("%p ABORT %s"), this, *SavedContextHandle.GetDebugString());
 
 		SavedContextHandle.ReleaseContextAndInvalidate();
 		Super::NotifyActionAborted();
@@ -178,7 +180,6 @@ public:
 #endif
 
 private:
-
 	FORCEINLINE static int32 CountResponses(struct FLatentResponse& Response)
 	{
 		struct FriendlyResponse : public FLatentResponse
@@ -206,13 +207,14 @@ protected:
  *
  * @tparam TLatentBase Latent action base class
  */
-template<typename TLatentBase = FPendingLatentAction>
+template <typename TLatentBase = FPendingLatentAction>
 class TEnhancedRepeatableLatentAction : public TEnhancedLatentAction<TLatentBase>
 {
 	using Super = TEnhancedLatentAction<TLatentBase>;
 	using ThisClass = TEnhancedRepeatableLatentAction;
+
 public:
-	template<typename ... TArgs>
+	template <typename... TArgs>
 	TEnhancedRepeatableLatentAction(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
 		: Super(Handle, Forward<TArgs>(Args)...)
 	{
@@ -243,11 +245,15 @@ protected:
 	FLatentCallInfo::FDelegate Callback;
 };
 
-template<>
+template <>
 inline FAsyncContextId FAsyncContextId::Make(const FLatentCallInfo& InResult)
 {
 	const uint32 Hash = ::PointerHash(InResult.OwningObject.Get(), ::HashCombine(InResult.UUID, InResult.CallID));
+#if WITH_CONTEXT_TYPE_TAG
 	return FAsyncContextId(Hash, FAsyncContextId::EContextType::CT_LatentAction);
+#else
+	return FAsyncContextId(Hash);
+#endif
 }
 
 #undef UE_API

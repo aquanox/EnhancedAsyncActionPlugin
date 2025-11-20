@@ -8,6 +8,7 @@
 
 #define UE_API ENHANCEDASYNCACTION_API
 
+struct FPropertyBagPropertyDesc;
 class FMulticastDelegateProperty;
 enum class EPropertyBagContainerType : uint8;
 enum class EPropertyBagPropertyType : uint8;
@@ -34,6 +35,8 @@ struct UE_API FPropertyTypeInfo
 	explicit FPropertyTypeInfo(EPropertyBagPropertyType Type);
 	// from reflection
 	explicit FPropertyTypeInfo(const FProperty* ExistingProperty);
+	// from property descrpiptor
+	explicit FPropertyTypeInfo(const FPropertyBagPropertyDesc* ExistingProperty);
 	// simple
 	FPropertyTypeInfo(EPropertyBagPropertyType Type, TObjectPtr<const UObject> Object);
 
@@ -47,6 +50,8 @@ struct UE_API FPropertyTypeInfo
 	bool IsWildcard() const;
 	bool IsValid() const;
 	bool IsSupported() const;
+
+	bool IsCompatibleWith(const FPropertyTypeInfo& Other) const;
 
 	/**
 	 *
@@ -73,6 +78,13 @@ namespace EAA::Internals
 	UE_API EPropertyBagContainerType GetContainerTypeFromProperty(const FProperty* InSourceProperty);
 	UE_API EPropertyBagPropertyType GetValueTypeFromProperty(const FProperty* InSourceProperty);
 	UE_API UObject* GetValueTypeObjectFromProperty(const FProperty* InSourceProperty);
+
+	UE_API bool IsContainerProperty(const FProperty* Property);
+
+	/**
+	 * Test if property bag property compatible with given source property (for variadic/generic accessors)
+	 */
+	UE_API bool IsCompatibleWithProperty(EAccessorRole Role, const FPropertyBagPropertyDesc* Descriptor, const FProperty* Property);
 }
 
 #undef UE_API
