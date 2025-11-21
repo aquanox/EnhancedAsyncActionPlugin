@@ -77,24 +77,23 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::CreateContextFor
 	return ValueOrError.GetValue();
 }
 
-FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate)
+FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, bool bInitContainer, FEnhancedLatentActionDelegate Delegate)
 {
-	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
+	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateLatent Owner=%s UUID=%d call=%d init=%d"), *GetNameSafe(Owner), UUID, CallUUID, bInitContainer);
 
-	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(FLatentCallInfo::Make(Owner, UUID, CallUUID, Delegate));
+	const FLatentCallInfo CallInfo = FLatentCallInfo::Make(Owner, UUID, CallUUID, Delegate);
+	if (!bInitContainer)
+	{ // context handle without container requested (when there is nothing to capture)
+		return FEnhancedLatentActionContextHandle(CallInfo);
+	}
+
+	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(CallInfo);
 	if (ValueOrError.HasError())
 	{
 		UE_LOG(LogEnhancedAction, Error, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedLatentActionContextHandle();
 	}
 	return ValueOrError.GetValue();
-}
-
-FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateEmptyHandleForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate)
-{
-	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateEmptyHandleForLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
-
-	return FEnhancedLatentActionContextHandle(FLatentCallInfo::Make(Owner, UUID, CallUUID, Delegate));
 }
 
 void UEnhancedAsyncContextLibrary::DestroyContextForLatent(const FEnhancedLatentActionContextHandle& Handle)

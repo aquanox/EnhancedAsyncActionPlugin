@@ -330,6 +330,11 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetupContext(
 	UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin, FString Config,
 	UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
+	if (Config.IsEmpty())
+	{ // there are no params to capture, can skip
+		return true;
+	}
+
 	bool bIsErrorFree = true;
 
 	// Create a call to context setup
@@ -384,6 +389,11 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextData(
 	const TArray<FInputPinInfo>& CaptureInputs, UEdGraphPin* InContextHandlePin, UEdGraphPin*& InOutLastThenPin,
 	UK2Node* Self, const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
+	if (CaptureInputs.Num() == 0)
+	{ // there are no capture inputs. can safely skip
+		return true;
+	}
+
 	bool bIsErrorFree = true;
 	for (const FInputPinInfo& Info : CaptureInputs)
 	{
@@ -813,6 +823,11 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
 {
 	bool bIsErrorFree = true;
 
+	if (CaptureOutputs.Num() == 0)
+	{ // there are no outputs, can safely skip
+		return true;
+	}
+
 	// Create a "Make Array" node to compile the list of arguments into an array
 	UK2Node_MakeArray* MakeArrayNode = CompilerContext.SpawnIntermediateNode<UK2Node_MakeArray>(Self, SourceGraph);
 	MakeArrayNode->NumInputs = CaptureOutputs.Num();
@@ -943,13 +958,27 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleInvokeActivate(
 	return bIsErrorFree;
 }
 
+void UK2Node_EnhancedAsyncTaskBase::OrphanCapturePins()
+{
+	// When context is not used by making them execs can make base implementation ignore them as they will be not a "Data pins" :D
+
+	const FEdGraphPinType ExecPinType(UEdGraphSchema_K2::PC_Exec, NAME_None, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
+
+	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
+	{
+		InPin->PinType = ExecPinType;
+		OutPin->PinType = ExecPinType;
+		return true;
+	});
+}
+
 void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
 {
 	const UEdGraphSchema_K2* Schema = CompilerContext.GetSchema();
 	check(SourceGraph && Schema);
 
 	// Is Context feature used on this node
-	const bool bContextRequired = AnyCapturePinHasLinks();
+	const bool bContextRequired = GetNumCaptures() > 0 && AnyCapturePinHasLinks();
 
 	// If there is no need in context - just use default implementation of async node
 	if (!bContextRequired)
@@ -1054,10 +1083,7 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	check(CaptureContextHandlePin);
 
 	// Configure context
-	const bool bContextSetupRequired = bContextRequired && GetNumCaptures() > 0
-		&& EAA::Switches::bWithSetupContext
-		&& !EAA::Switches::bVariadicGetSet;
-
+	const bool bContextSetupRequired = bContextRequired && !EAA::Switches::bVariadicGetSet;
 	if (bContextSetupRequired)
 	{
 		HandleSetupContext(CaptureContextHandlePin, LastThenPin, BuildContextConfigString(), this, Schema, CompilerContext, SourceGraph);
@@ -1085,7 +1111,6 @@ void UK2Node_EnhancedAsyncTaskBase::ExpandNode(class FKismetCompilerContext& Com
 	{
 		bIsErrorFree &= HandleSetContextData(CaptureInputs, CaptureContextHandlePin, LastThenPin, this, Schema, CompilerContext, SourceGraph);
 	}
-	ensureAlwaysMsgf(bIsErrorFree, TEXT("node failed to build"));
 
 	UEdGraphPin* OutputAsyncTaskProxy = FindPin(FBaseAsyncTaskHelper::GetAsyncTaskProxyName());
 	bIsErrorFree &= !OutputAsyncTaskProxy || CompilerContext.MovePinLinksToIntermediate(*OutputAsyncTaskProxy, *ProxyObjectPin).CanSafeConnect();

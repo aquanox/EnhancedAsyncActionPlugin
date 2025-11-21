@@ -189,9 +189,8 @@ Context created only if there is at least one capture pin connected.
 ## TODOS
 
 - Write some tests
-- Optimize graph updates on actions
-- Improve error handling and clear up logging
-- Better handling of malformed or changed nodes (there are lots of asserts for debug purposes right now)
+- Clean up debug logging
+- Improve handling of malformed or changed nodes (there are lots of asserts for debug purposes right now)
 - Maps support (has to wait for UE 5.8)
 
 ## Unreal Engine Versions

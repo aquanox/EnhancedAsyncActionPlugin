@@ -332,7 +332,7 @@ void IK2Node_AsyncContextInterface::GetStandardPins(EEdGraphPinDirection Dir, TA
 	OutPins.Reserve(Pins.Num());
 	for (UEdGraphPin* const Pin : Pins)
 	{
-		if (Pin->Direction == Dir && !IsCapturePin(Pin))
+		if ((Pin->Direction == Dir || EGPD_MAX == Dir) && !IsCapturePin(Pin))
 		{
 			OutPins.Add(Pin);
 		}
@@ -345,7 +345,7 @@ FString IK2Node_AsyncContextInterface::BuildContextConfigString() const
 
 	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
 	{
-		auto DetectedPinType = EAA::Internals::DetermineCommonPinType(InPin, OutPin);
+		FEdGraphPinType DetectedPinType = EAA::Internals::DetermineCommonPinType(InPin, OutPin);
 
 		if (BuilderBase.Len())
 			BuilderBase.Append(TEXT(";"));
@@ -358,20 +358,6 @@ FString IK2Node_AsyncContextInterface::BuildContextConfigString() const
 	});
 
 	return BuilderBase.ToString();
-}
-
-void IK2Node_AsyncContextInterface::OrphanCapturePins()
-{
-	// When context is not used by making them execs can make base implementation ignore them as they will be not a "Data pins" :D
-
-	const FEdGraphPinType ExecPinType(UEdGraphSchema_K2::PC_Exec, NAME_None, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
-
-	ForEachCapturePinPair([&](int32 Index, UEdGraphPin* InPin, UEdGraphPin* OutPin)
-	{
-		InPin->PinType = ExecPinType;
-		OutPin->PinType = ExecPinType;
-		return true;
-	});
 }
 
 void FK2Node_AsyncContextMenuActions::SetupActions(UK2Node* Node, UToolMenu* Menu, UGraphNodeContextMenuContext* Context)

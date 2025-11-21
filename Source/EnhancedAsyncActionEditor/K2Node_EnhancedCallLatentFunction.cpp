@@ -281,7 +281,7 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 	// Toggle repeatable mode
 	const FLatentCallInfo::ETriggerMode LatentTriggerMode = GetTriggerMode(this);
 	// Toggles Context feature used on this node
-	const bool bContextRequired = AnyCapturePinHasLinks();
+	const bool bContextRequired = GetNumCaptures() > 0 && AnyCapturePinHasLinks();
 
 	LastContextPin = nullptr;
 	UEdGraphPin* LastThenPin = nullptr;
@@ -319,17 +319,15 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 
 	{
 		auto* CallCreateContext = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
-		if (bContextRequired)
-			CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateContextForLatent)));
-		else
-			CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateEmptyHandleForLatent)));
+		CallCreateContext->SetFromFunction(UEnhancedAsyncContextLibrary::StaticClass()->FindFunctionByName(GET_FUNCTION_NAME_CHECKED(UEnhancedAsyncContextLibrary, CreateContextForLatent)));
 		CallCreateContext->AllocateDefaultPins();
 
 		// Set Owner pin
 		auto* CallSelf = CompilerContext.SpawnIntermediateNode<UK2Node_Self>(this, SourceGraph);
 		CallSelf->AllocateDefaultPins();
 
-		bIsErrorFree &= Schema->TryCreateConnection(CallSelf->FindPinChecked(UEdGraphSchema_K2::PN_Self, EGPD_Output), CallCreateContext->FindPinChecked(TEXT("Owner"), EGPD_Input));
+		auto* OwnerPin = CallCreateContext->FindPinChecked(TEXT("Owner"), EGPD_Input);
+		bIsErrorFree &= Schema->TryCreateConnection(CallSelf->FindPinChecked(UEdGraphSchema_K2::PN_Self, EGPD_Output), OwnerPin);
 
 		// Set fixed value of The unique identifier for this latent action node in graph
 		const int32 UUID = CompilerContext.MessageLog.CalculateStableIdentifierForLatentActionManager(this);
@@ -342,7 +340,9 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		CallRandom->AllocateDefaultPins();
 
 		Schema->TrySetDefaultValue(*CallRandom->FindPinChecked(TEXT("Max"), EGPD_Input), FString::Printf(TEXT("%d"), INT_MAX - 1));
-		bIsErrorFree &= Schema->TryCreateConnection(CallRandom->GetReturnValuePin(), CallCreateContext->FindPinChecked(TEXT("CallUUID"), EGPD_Input));
+
+		auto* CIDPin = CallCreateContext->FindPinChecked(TEXT("CallUUID"), EGPD_Input);
+		bIsErrorFree &= Schema->TryCreateConnection(CallRandom->GetReturnValuePin(), CIDPin);
 
 		if (LatentTriggerMode == FLatentCallInfo::ETriggerMode::FromEventPin)
 		{
@@ -351,6 +351,10 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 			UEdGraphPin* EventDelegatePin = OnTriggerCE->FindPin(UK2Node_CustomEvent::DelegateOutputName);
 			bIsErrorFree &= FunctionPin && EventDelegatePin && Schema->TryCreateConnection(FunctionPin, EventDelegatePin);
 		}
+
+		// Set bInitContainer value. If nothing to capture simply skip creation of inner container
+		auto* InitPin = CallCreateContext->FindPinChecked(TEXT("bInitContainer"), EGPD_Input);
+		Schema->TrySetDefaultValue(*InitPin, bContextRequired ? TEXT("true") : TEXT("false"));
 
 		bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*GetExecPin(), *CallCreateContext->GetExecPin()).CanSafeConnect();
 		LastThenPin = CallCreateContext->GetThenPin();
@@ -376,7 +380,8 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		LastContextPin = LocalContextVar->GetVariablePin();
 	}
 
-	if (bContextRequired && !EAA::Switches::bVariadicGetSet)
+	const bool bContextSetupRequired = bContextRequired && !EAA::Switches::bVariadicGetSet;
+	if (bContextSetupRequired)
 	{
 		bIsErrorFree &= UK2Node_EnhancedAsyncTaskBase::HandleSetupContext(LastContextPin, LastThenPin, BuildContextConfigString(), this, Schema, CompilerContext, SourceGraph);
 	}

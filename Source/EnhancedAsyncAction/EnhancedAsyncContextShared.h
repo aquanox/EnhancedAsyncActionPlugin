@@ -10,10 +10,8 @@
 
 namespace EAA::Switches
 {
-	// gather known types and call setup to optimize property bag reconstruction
-	constexpr bool bWithSetupContext = true;
 	// enables debug tooltips
-	constexpr bool bDebugTooltips = true;
+	constexpr bool bDebugTooltips = false;
 	// uses variadic set/get function instead of multiple single get/set
 	constexpr bool bVariadicGetSet = true;
 	// latents use only variadic args nodes for now

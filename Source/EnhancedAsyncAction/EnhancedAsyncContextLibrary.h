@@ -38,15 +38,7 @@ public:
 	 * @return Context handle
 	 */
 	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=true))
-	static UE_API FEnhancedLatentActionContextHandle CreateContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate);
-
-	/**
-	 * Create dummy context for latent. Called by UK2Node_EnhancedCallLatentFunction.
-	 *
-	 * @return Context handle
-	 */
-	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core", meta=(BlueprintInternalUseOnly=true))
-	static UE_API FEnhancedLatentActionContextHandle CreateEmptyHandleForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, FEnhancedLatentActionDelegate Delegate);
+	static UE_API FEnhancedLatentActionContextHandle CreateContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID, bool bInitContainer, FEnhancedLatentActionDelegate Delegate);
 
 	/**
 	 * Destroy capture context used by latent function. Called by UK2Node_EnhancedCallLatentFunction.
