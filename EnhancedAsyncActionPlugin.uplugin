@@ -1,7 +1,7 @@
 ﻿{
 	"FileVersion": 3,
-	"Version": 1,
-	"VersionName": "0.1.0",
+	"Version": 3,
+	"VersionName": "0.3.0",
 	"FriendlyName": "EnhancedAsyncAction",
 	"Description": "Plugin enhances blueprint async actions with data capture functionality",
 	"Category": "Other",
