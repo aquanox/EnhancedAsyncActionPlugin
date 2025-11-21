@@ -332,17 +332,6 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetupContext(
 {
 	bool bIsErrorFree = true;
 
-	// Create Make Literal String function
-	UK2Node_CallFunction* const CallMakeLiteral = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
-	CallMakeLiteral->FunctionReference.SetExternalMember(
-		GET_MEMBER_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
-		UKismetSystemLibrary::StaticClass()
-	);
-	CallMakeLiteral->AllocateDefaultPins();
-
-	auto LiteralValuePin = CallMakeLiteral->FindPinChecked(TEXT("Value"), EGPD_Input);
-	LiteralValuePin->DefaultValue = Config;
-
 	// Create a call to context setup
 	UK2Node_CallFunction* const CallSetupNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
 	CallSetupNode->FunctionReference.SetExternalMember(
@@ -364,8 +353,25 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetupContext(
 
 	// Set config value
 	UEdGraphPin* ConfigPin = CallSetupNode->FindPinChecked(TEXT("Config"));
-	// Schema->TrySetDefaultValue(*ConfigPin, CapturesConfigString);
-	bIsErrorFree &= Schema->TryCreateConnection(CallMakeLiteral->GetReturnValuePin(), ConfigPin);
+	if (!EAA::Switches::bOptimizeSkipLiterals)
+	{
+		// Create Make Literal String function
+		UK2Node_CallFunction* const CallMakeLiteral = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
+		CallMakeLiteral->FunctionReference.SetExternalMember(
+			GET_MEMBER_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
+			UKismetSystemLibrary::StaticClass()
+		);
+		CallMakeLiteral->AllocateDefaultPins();
+
+		UEdGraphPin* LiteralValuePin = CallMakeLiteral->FindPinChecked(TEXT("Value"), EGPD_Input);
+		Schema->TrySetDefaultValue(*LiteralValuePin, Config);
+
+		bIsErrorFree &= Schema->TryCreateConnection(CallMakeLiteral->GetReturnValuePin(), ConfigPin);
+	}
+	else
+	{
+		Schema->TrySetDefaultValue(*ConfigPin, Config);
+	}
 
 	// Connect [CreateContext] and [SetupContext]
 	bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallSetupNode->GetExecPin());
@@ -471,6 +477,11 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 	);
 	CallSetVariadic->AllocateDefaultPins();
 
+	// Set the names parameter and force the MakeArray pin type deduction
+	UEdGraphPin* ArrayOut = MakeArrayNode->GetOutputPin();
+	bIsErrorFree &= Schema->TryCreateConnection(ArrayOut, CallSetVariadic->FindPinChecked(TEXT("Names")));
+	MakeArrayNode->PinConnectionListChanged(ArrayOut);
+
 	int32 ArrayInputIndex = 0;
 	for (const FInputPinInfo& Info : CaptureInputs)
 	{
@@ -479,21 +490,28 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 		UEdGraphPin* const InputPin = Info.InputPin;
 		check(InputPin->Direction == EGPD_Input);
 
-		// Create the "Make Literal String" node
-		UK2Node_CallFunction* MakeLiteralStringNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
-		MakeLiteralStringNode->FunctionReference.SetExternalMember(
-			GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
-			UKismetSystemLibrary::StaticClass()
-		);
-		MakeLiteralStringNode->AllocateDefaultPins();
-
-		// Set the literal value to the capture parameter name
-		UEdGraphPin* MakeLiteralStringValuePin = MakeLiteralStringNode->FindPinChecked(TEXT("Value"), EGPD_Input);
-		Schema->TrySetDefaultValue(*MakeLiteralStringValuePin, VariadicPropertyName.ToString());
-
-		// Find the input pin on the "Make Array" node by index and link it to the literal string
+		// Find the input pin on the "Make Array" node by index and set value
 		UEdGraphPin* ArrayIn = MakeArrayNode->FindPinChecked(MakeArrayNode->GetPinName(ArrayInputIndex++));
-		bIsErrorFree &= Schema->TryCreateConnection(MakeLiteralStringNode->GetReturnValuePin(), ArrayIn);
+		if (!EAA::Switches::bOptimizeSkipLiterals)
+		{
+			// Create the "Make Literal String" node
+			UK2Node_CallFunction* MakeLiteralStringNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
+			MakeLiteralStringNode->FunctionReference.SetExternalMember(
+				GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
+				UKismetSystemLibrary::StaticClass()
+			);
+			MakeLiteralStringNode->AllocateDefaultPins();
+
+			// Set the literal value to the capture parameter name
+			UEdGraphPin* MakeLiteralStringValuePin = MakeLiteralStringNode->FindPinChecked(TEXT("Value"), EGPD_Input);
+			Schema->TrySetDefaultValue(*MakeLiteralStringValuePin, VariadicPropertyName.ToString());
+
+			bIsErrorFree &= Schema->TryCreateConnection(MakeLiteralStringNode->GetReturnValuePin(), ArrayIn);
+		}
+		else
+		{
+			Schema->TrySetDefaultValue(*ArrayIn, VariadicPropertyName.ToString());
+		}
 
 		FEdGraphPinType PinType = InputPin->PinType;
 		PinType.bIsReference = true;
@@ -511,7 +529,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 			bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*InputPin, *ValuePin).CanSafeConnect();
 		}
 
-		CallSetVariadic->NotifyPinConnectionListChanged(ValuePin);
+		CallSetVariadic->PinConnectionListChanged(ValuePin);
 	}
 
 	// Set the handle parameter
@@ -524,12 +542,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleSetContextDataVariadic(
 	{
 		bIsErrorFree &= Schema->TryCreateConnection(InContextHandlePin, HandlePin);
 	}
-	CallSetVariadic->NotifyPinConnectionListChanged(HandlePin);
-
-	// Set the names parameter and force the makearray pin type
-	UEdGraphPin* ArrayOut = MakeArrayNode->GetOutputPin();
-	bIsErrorFree &= Schema->TryCreateConnection(ArrayOut, CallSetVariadic->FindPinChecked(TEXT("Names")));
-	MakeArrayNode->PinConnectionListChanged(ArrayOut);
+	CallSetVariadic->PinConnectionListChanged(HandlePin);
 
 	// Connect execs
 	bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallSetVariadic->GetExecPin());
@@ -805,34 +818,48 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
 	MakeArrayNode->NumInputs = CaptureOutputs.Num();
 	MakeArrayNode->AllocateDefaultPins();
 
-	int32 ArrayInputIndex = 0;
-	for (const FOutputPinInfo& OutputPair : CaptureOutputs)
-	{
-		const FName VariadicPropertyName = EAA::Internals::IndexToName(OutputPair.CaptureIndex);
-
-		// Create the "Make Literal String" node
-		UK2Node_CallFunction* MakeLiteralStringNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
-		MakeLiteralStringNode->FunctionReference.SetExternalMember(
-			GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
-			UKismetSystemLibrary::StaticClass()
-		);
-		MakeLiteralStringNode->AllocateDefaultPins();
-
-		// Set the literal value to the capture parameter name
-		UEdGraphPin* MakeLiteralStringValuePin = MakeLiteralStringNode->FindPinChecked(TEXT("Value"), EGPD_Input);
-		Schema->TrySetDefaultValue(*MakeLiteralStringValuePin, VariadicPropertyName.ToString());
-
-		// Find the input pin on the "Make Array" node by index and link it to the literal string
-		UEdGraphPin* ArrayIn = MakeArrayNode->FindPinChecked(MakeArrayNode->GetPinName(ArrayInputIndex++));
-		bIsErrorFree &= Schema->TryCreateConnection(MakeLiteralStringNode->GetReturnValuePin(), ArrayIn);
-	}
-
+	//
 	auto CallGetVariadic = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
 	CallGetVariadic->FunctionReference.SetExternalMember(
 		GET_MEMBER_NAME_CHECKED(UEnhancedAsyncContextLibrary, Handle_GetValue_Variadic),
 		UEnhancedAsyncContextLibrary::StaticClass()
 	);
 	CallGetVariadic->AllocateDefaultPins();
+
+	// Set the names parameter and force the MakeArray pin type deduction
+	UEdGraphPin* ArrayOut = MakeArrayNode->GetOutputPin();
+	bIsErrorFree &= Schema->TryCreateConnection(ArrayOut, CallGetVariadic->FindPinChecked(TEXT("Names")));
+	MakeArrayNode->PinConnectionListChanged(ArrayOut);
+
+	int32 ArrayInputIndex = 0;
+	for (const FOutputPinInfo& OutputPair : CaptureOutputs)
+	{
+		const FName VariadicPropertyName = EAA::Internals::IndexToName(OutputPair.CaptureIndex);
+
+		// Find the input pin on the "Make Array" node by index and link it to the literal string
+		UEdGraphPin* ArrayIn = MakeArrayNode->FindPinChecked(MakeArrayNode->GetPinName(ArrayInputIndex++));
+
+		if (!EAA::Switches::bOptimizeSkipLiterals)
+		{
+			// Create the "Make Literal String" node
+			UK2Node_CallFunction* MakeLiteralStringNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(Self, SourceGraph);
+			MakeLiteralStringNode->FunctionReference.SetExternalMember(
+				GET_FUNCTION_NAME_CHECKED(UKismetSystemLibrary, MakeLiteralString),
+				UKismetSystemLibrary::StaticClass()
+			);
+			MakeLiteralStringNode->AllocateDefaultPins();
+
+			// Set the literal value to the capture parameter name
+			UEdGraphPin* MakeLiteralStringValuePin = MakeLiteralStringNode->FindPinChecked(TEXT("Value"), EGPD_Input);
+			Schema->TrySetDefaultValue(*MakeLiteralStringValuePin, VariadicPropertyName.ToString());
+
+			bIsErrorFree &= Schema->TryCreateConnection(MakeLiteralStringNode->GetReturnValuePin(), ArrayIn);
+		}
+		else
+		{
+			Schema->TrySetDefaultValue(*ArrayIn, VariadicPropertyName.ToString());
+		}
+	}
 
 	// Set the handle parameter
 	UEdGraphPin* HandlePin = CallGetVariadic->FindPinChecked(EAA::Internals::PIN_Handle);
@@ -844,12 +871,7 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
 	{
 		bIsErrorFree &= Schema->TryCreateConnection(ContextHandlePin, HandlePin);
 	}
-	CallGetVariadic->NotifyPinConnectionListChanged(HandlePin);
-
-	// Set the names parameter and force the makearray pin type
-	UEdGraphPin* ArrayOut = MakeArrayNode->GetOutputPin();
-	bIsErrorFree &= Schema->TryCreateConnection(ArrayOut, CallGetVariadic->FindPinChecked(TEXT("Names")));
-	MakeArrayNode->PinConnectionListChanged(ArrayOut);
+	CallGetVariadic->PinConnectionListChanged(HandlePin);
 
 	bIsErrorFree &= Schema->TryCreateConnection(InOutLastThenPin, CallGetVariadic->GetExecPin());
 	InOutLastThenPin = CallGetVariadic->GetThenPin();
@@ -859,8 +881,8 @@ bool UK2Node_EnhancedAsyncTaskBase::HandleGetContextDataVariadic(
 		const FName VariadicPropertyName = EAA::Internals::IndexToName(OutputPair.CaptureIndex);
 
 		FEdGraphPinType PinType = OutputPair.OutputPin->PinType;
-		PinType.bIsReference = true;
-		PinType.bIsConst = false;
+		// PinType.bIsReference = true;
+		// PinType.bIsConst = false;
 
 		// create variadic pin
 		UEdGraphPin* const ValuePin = CallGetVariadic->CreatePin(EGPD_Output, PinType, VariadicPropertyName);

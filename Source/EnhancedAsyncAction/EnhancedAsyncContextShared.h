@@ -18,6 +18,8 @@ namespace EAA::Switches
 	constexpr bool bVariadicGetSet = true;
 	// latents use only variadic args nodes for now
 	constexpr bool bEnableLatents = true;
+	// optimize generated graph by skipping literals and using pin values directly
+	constexpr bool bOptimizeSkipLiterals = true;
 }
 
 namespace EAA::Internals
