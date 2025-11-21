@@ -209,10 +209,24 @@ bool UK2Node_EnhancedCallLatentFunction::GetContextPin(UK2Node_CallFunction* Nod
 	return InPin != nullptr;
 }
 
-bool UK2Node_EnhancedCallLatentFunction::IsEventMode(UK2Node_CallFunction* Node)
+FLatentCallInfo::ETriggerMode UK2Node_EnhancedCallLatentFunction::GetTriggerMode(UK2Node_CallFunction* Node)
 {
-	auto* MetaValue = Node->GetTargetFunction()->FindMetaData(EAA::Internals::MD_RepeatableLatent);
-	return MetaValue != nullptr;
+	static const FName TypeThen("Then");
+	static const FName TypeFromThenPin("FromThenPin");
+	static const FName TypeEvent("Event");
+	static const FName TypeFromEventPin("FromEventPin");
+
+	if (auto* MetaValue = Node->GetTargetFunction()->FindMetaData(EAA::Internals::MD_LatentTrigger))
+	{
+		const FName Value(*MetaValue->TrimStartAndEnd());
+		if (Value == TypeThen || Value == TypeFromThenPin)
+			return FLatentCallInfo::ETriggerMode::FromThenPin;
+		if (Value == TypeEvent || Value == TypeFromEventPin)
+			return FLatentCallInfo::ETriggerMode::FromEventPin;
+
+		ensureAlwaysMsgf(false, TEXT("LatentTrigger metadata must be either 'Then/FromThenPin' or 'Event/FromEventPin' "));
+	}
+	return FLatentCallInfo::ETriggerMode::Default;
 }
 
 bool UK2Node_EnhancedCallLatentFunction::ValidateCaptures(const UEdGraphSchema_K2* Schema, FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph)
@@ -265,7 +279,7 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 	}
 
 	// Toggle repeatable mode
-	const bool bEventMode = IsEventMode(this) && EAA::Switches::bEnableRepeatableLatents;
+	const FLatentCallInfo::ETriggerMode LatentTriggerMode = GetTriggerMode(this);
 	// Toggles Context feature used on this node
 	const bool bContextRequired = AnyCapturePinHasLinks();
 
@@ -281,13 +295,13 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 	// create custom event node for retriggerable mode
 
 	UK2Node_CustomEvent* OnTriggerCE = nullptr;
-	if (bEventMode)
+	if (LatentTriggerMode == FLatentCallInfo::ETriggerMode::FromEventPin)
 	{
 		OnTriggerCE = CompilerContext.SpawnIntermediateNode<UK2Node_CustomEvent>(this, SourceGraph);
 		OnTriggerCE->CustomFunctionName = *FString::Printf(TEXT("OnTrigger_%s"), *CompilerContext.GetGuid(this));
 		OnTriggerCE->AllocateDefaultPins();
 		{
-			const UFunction* Signature = TEnhancedRepeatableLatentAction<FPendingLatentAction>::GetDelegateSignature();
+			const UFunction* Signature = FLatentCallInfo::GetDelegateSignature();
 			for (TFieldIterator<FProperty> PropIt(Signature); PropIt && (PropIt->PropertyFlags & CPF_Parm); ++PropIt)
 			{
 				const FProperty* Param = *PropIt;
@@ -330,7 +344,7 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 		Schema->TrySetDefaultValue(*CallRandom->FindPinChecked(TEXT("Max"), EGPD_Input), FString::Printf(TEXT("%d"), INT_MAX - 1));
 		bIsErrorFree &= Schema->TryCreateConnection(CallRandom->GetReturnValuePin(), CallCreateContext->FindPinChecked(TEXT("CallUUID"), EGPD_Input));
 
-		if (bEventMode)
+		if (LatentTriggerMode == FLatentCallInfo::ETriggerMode::FromEventPin)
 		{
 			// Connect Delegate pin
 			UEdGraphPin* FunctionPin = CallCreateContext->FindPinChecked(TEXT("Delegate"));
@@ -419,14 +433,14 @@ void UK2Node_EnhancedCallLatentFunction::ExpandNode(class FKismetCompilerContext
 			bIsErrorFree &= CompilerContext.MovePinLinksToIntermediate(*GetExecPin(), *CallLatent->GetExecPin()).CanSafeConnect();
 
 		// Select where READ will happen. In normal mode - from Async Then, In event mode - from CustomEvent Then
-		if (bEventMode)
+		if (LatentTriggerMode == FLatentCallInfo::ETriggerMode::FromEventPin)
 			LastThenPin = OnTriggerCE->GetThenPin();
 		else
 			LastThenPin = CallLatent->GetThenPin();
 	}
 
 	// Select where to read context handle from
-	if (bContextRequired && bEventMode)
+	if (bContextRequired && LatentTriggerMode == FLatentCallInfo::ETriggerMode::FromEventPin)
 	{
 		LastContextPin = OnTriggerCE->FindPinByPredicate([](UEdGraphPin* Pin) -> bool
 		{

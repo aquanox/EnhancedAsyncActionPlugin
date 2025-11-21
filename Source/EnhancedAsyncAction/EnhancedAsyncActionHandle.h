@@ -31,7 +31,7 @@ struct TStructOpsTypeTraits<FEnhancedAsyncActionContextHandle>
 {
 	enum
 	{
-		// WithCopy = true,
+		WithCopy = true,
 	};
 };
 

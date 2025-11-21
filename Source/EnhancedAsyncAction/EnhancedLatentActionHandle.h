@@ -20,15 +20,39 @@ struct FEnhancedLatentActionContextHandle;
  */
 struct FLatentCallInfo
 {
+    enum class ETriggerMode
+    {
+	    /**
+	     * The latent action will continue from "Then" pin.
+	     *
+	     * UpdateOperation -> Write context variable -> Execute
+	     */
+	    FromThenPin,
+	    /**
+	     * The latent action will continue by calling continuation delegate.
+	     *
+	     * UpdateOperation -> Call delegate -> Read context from delegate
+	     */
+	    FromEventPin,
+
+    	/**
+    	 * What mode to select when no metadata present
+    	 */
+    	Default = FromThenPin
+	};
+
 	using FDelegate = TDelegate<void(const FEnhancedLatentActionContextHandle&)>;
 
+	// Active trigger mode.
+	ETriggerMode TriggerMode;
 	// Owning object
 	TWeakObjectPtr<const UObject> OwningObject;
 	// Stable latent function identifier
 	int32 UUID = 0;
 	// Unique random identifier to track each call
 	int32 CallID = 0;
-	// optional action handle
+	// optional action trigger delegate
+	// to avoid circular dependency it does not use dynamic delegate.
 	FDelegate Delegate;
 
 	inline bool IsValid() const
@@ -40,7 +64,57 @@ struct FLatentCallInfo
 	{
 		return FString::Printf(TEXT("Owner=%s UUID=%d CallID=%x Delegate=%d"), *GetNameSafe(OwningObject.Get()), UUID, CallID, (int32)Delegate.IsBound());
 	}
+
+    /**
+     * Construct new call info object
+     * @param Owner
+     * @param UUID
+     * @param CallUUID
+     * @param Delegate
+     * @return
+     */
+    template<typename TDelegate = class FEnhancedLatentActionDelegate>
+	static FLatentCallInfo Make(const UObject* Owner, int32 UUID, int32 CallUUID, TDelegate Delegate)
+	{
+		FLatentCallInfo Info;
+		Info.OwningObject = Owner;
+		Info.UUID = UUID;
+		Info.CallID = CallUUID;
+		if (Delegate.IsBound())
+		{
+			Info.TriggerMode = ETriggerMode::FromEventPin;
+			Info.Delegate.BindUFunction(Delegate.GetUObject(), Delegate.GetFunctionName());
+		}
+		else
+		{
+			Info.TriggerMode = ETriggerMode::FromThenPin;
+		}
+		return Info;
+	}
+
+	/**
+	 * Returns signature object of trigger delegate.
+	 */
+	static UFunction* GetDelegateSignature()
+	{
+		UFunction* Function = FindObject<UFunction>(
+			FindPackage(nullptr, TEXT("/Script/EnhancedAsyncAction")), TEXT("EnhancedLatentActionDelegate__DelegateSignature")
+		);
+		check(Function != nullptr);
+		return Function;
+	}
 };
+
+template <>
+inline FAsyncContextId FAsyncContextId::Make(const FLatentCallInfo& InResult)
+{
+	const uint32 Hash = ::PointerHash(InResult.OwningObject.Get(), ::HashCombine(InResult.UUID, InResult.CallID));
+#if WITH_CONTEXT_TYPE_TAG
+	return FAsyncContextId(Hash, FAsyncContextId::EContextType::CT_LatentAction);
+#else
+	return FAsyncContextId(Hash);
+#endif
+}
 
 /**
  * Latent call context handle that is passed around
@@ -81,18 +155,15 @@ public:
 	 */
 	void ReleaseContextAndInvalidate();
 
-protected:
-	friend class FEnhancedAsyncContextManager;
-
-	template <typename>
-	friend class TEnhancedLatentAction;
-	template <typename>
-	friend class TEnhancedRepeatableLatentAction;
+public:
 
 	// Latent function call unique identifier that can be obtained from outside
 	FLatentCallInfo CallInfo;
 };
 
+/**
+ * Continuation trigger delegate that provides context to target
+ */
 DECLARE_DYNAMIC_DELEGATE_OneParam(FEnhancedLatentActionDelegate, const FEnhancedLatentActionContextHandle&, Handle);
 
 template <>
@@ -101,32 +172,43 @@ struct TStructOpsTypeTraits<FEnhancedLatentActionContextHandle>
 {
 	enum
 	{
-		// WithCopy = true,
+		WithCopy = true,
 	};
 };
 
 /**
- * A decorator to handle unique latent actions, when each call checks "Does the manager have another task with ID".
- *
- * Decorator saves current context and restores it when triggered.
+ * A decorator to handle latent actions with context
  *
  * @tparam TLatentBase Base class of latent action
+ * @tparam TriggerMode The continuation trigger mode used for this action
  */
-template <typename TLatentBase = FPendingLatentAction>
-class TEnhancedLatentAction : public TLatentBase
+template <typename TLatentBase, FLatentCallInfo::ETriggerMode TriggerMode>
+class TEnhancedLatentActionBase : public TLatentBase
 {
 	using Super = TLatentBase;
-	using ThisClass = TEnhancedLatentAction;
-
 public:
+
 	template <typename... TArgs>
-	TEnhancedLatentAction(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
-		: Super(Forward<TArgs>(Args)...), SavedContextHandle(Handle), ContextHandleRef(const_cast<FEnhancedLatentActionContextHandle&>(Handle))
+	TEnhancedLatentActionBase(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
+		: Super(Forward<TArgs>(Args)...)
+		, SavedContextHandle(Handle)
+		, ContextHandleRef(const_cast<FEnhancedLatentActionContextHandle&>(Handle))
 	{
-		ContextHandleRef = SavedContextHandle;
+		check(SavedContextHandle.CallInfo.TriggerMode == TriggerMode);
+		// here may be some modifications in future so handle so kept the assign
+		if (TriggerMode == FLatentCallInfo::ETriggerMode::FromThenPin)
+		{
+			ContextHandleRef = SavedContextHandle;
+		}
 	}
 
-	virtual ~TEnhancedLatentAction() = default;
+	virtual ~TEnhancedLatentActionBase()
+	{
+		// Context will be released by DestroyContext call that is integrated to graph
+
+		// In case latent action was aborted or owning object is gone
+		// context will be freed by NotifyActionAborted or NotifyObjectDestroyed
+	}
 
 	virtual void UpdateOperation(FLatentResponse& Response) override
 	{
@@ -150,15 +232,33 @@ public:
 	{
 		UE_LOG(LogEnhancedAction, Verbose, TEXT("%p SELECT %s"), this, *SavedContextHandle.GetDebugString());
 
-		// Switch to context
-		ContextHandleRef = SavedContextHandle;
+		if (TriggerMode == FLatentCallInfo::ETriggerMode::FromThenPin)
+		{
+			// Switch to context, when LatentActionManager finishes checking all actions for the current object
+			// it will trigger execution pin
+			ContextHandleRef = SavedContextHandle;
+			return;
+		}
+
+		if (TriggerMode == FLatentCallInfo::ETriggerMode::FromEventPin)
+		{
+			const FLatentCallInfo::FDelegate& Callback = SavedContextHandle.CallInfo.Delegate;
+			check(Callback.IsBound());
+			// There is no need to touch ContextHandleRef as it may be garbage if reference to function local variable was captured
+			// Delegate is only what important that was acquired initially
+
+			// Directly trigger the continuation.
+			// The "Then" pin of original latent task not connected to anything.
+			Callback.ExecuteIfBound(SavedContextHandle);
+			return;
+		}
 	}
 
 	virtual void NotifyObjectDestroyed()
 	{
 		UE_LOG(LogEnhancedAction, Verbose, TEXT("%p DESTROY %s"), this, *SavedContextHandle.GetDebugString());
 
-		SavedContextHandle.ReleaseContextAndInvalidate();
+		ReleaseContextAndInvalidate();
 		Super::NotifyObjectDestroyed();
 	}
 
@@ -166,7 +266,7 @@ public:
 	{
 		UE_LOG(LogEnhancedAction, Verbose, TEXT("%p ABORT %s"), this, *SavedContextHandle.GetDebugString());
 
-		SavedContextHandle.ReleaseContextAndInvalidate();
+		ReleaseContextAndInvalidate();
 		Super::NotifyActionAborted();
 	}
 
@@ -179,21 +279,52 @@ public:
 	}
 #endif
 
+	// Helper to reset context
+	void ReleaseContextAndInvalidate()
+	{
+		if (SavedContextHandle.IsValid())
+		{
+			// will trigger DestroyContext by id and force invalidate the handle stored in action
+			// repeated calls wont pass valid check
+			const_cast<FEnhancedLatentActionContextHandle&>(SavedContextHandle).ReleaseContextAndInvalidate();
+		}
+	}
+
 private:
 	FORCEINLINE static int32 CountResponses(struct FLatentResponse& Response)
 	{
 		struct FriendlyResponse : public FLatentResponse
 		{
-			friend class TEnhancedLatentAction;
+			friend TEnhancedLatentActionBase;
 		};
 		return static_cast<FriendlyResponse&>(Response).LinksToExecute.Num();
 	}
 
 protected:
 	// The capture context handle
-	FEnhancedLatentActionContextHandle SavedContextHandle;
+	const FEnhancedLatentActionContextHandle SavedContextHandle;
 	// The reference to context handle in graph for updates
 	FEnhancedLatentActionContextHandle& ContextHandleRef;
+};
+
+/**
+ * A decorator to handle unique latent actions, when each call checks "Does the manager have another task with ID".
+ *
+ * Decorator saves current context and restores it when triggered.
+ *
+ * @tparam TLatentBase Base class of latent action
+ */
+template <typename TLatentBase>
+class TEnhancedLatentAction : public TEnhancedLatentActionBase<TLatentBase, FLatentCallInfo::ETriggerMode::FromThenPin>
+{
+	using Super = TEnhancedLatentActionBase<TLatentBase, FLatentCallInfo::ETriggerMode::FromThenPin>;
+public:
+	template <typename... TArgs>
+	TEnhancedLatentAction(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
+		: Super(Handle, Forward<TArgs>(Args)...)
+	{
+		checkf(!Handle.CallInfo.Delegate.IsBound(), TEXT("TEnhancedLatentAction requires metadata LatentTrigger=Then on function or does not specify it"));
+	}
 };
 
 /**
@@ -207,53 +338,17 @@ protected:
  *
  * @tparam TLatentBase Latent action base class
  */
-template <typename TLatentBase = FPendingLatentAction>
-class TEnhancedRepeatableLatentAction : public TEnhancedLatentAction<TLatentBase>
+template <typename TLatentBase>
+class TEnhancedRepeatableLatentAction : public TEnhancedLatentActionBase<TLatentBase, FLatentCallInfo::ETriggerMode::FromEventPin>
 {
-	using Super = TEnhancedLatentAction<TLatentBase>;
-	using ThisClass = TEnhancedRepeatableLatentAction;
-
+	using Super = TEnhancedLatentActionBase<TLatentBase, FLatentCallInfo::ETriggerMode::FromEventPin>;
 public:
 	template <typename... TArgs>
 	TEnhancedRepeatableLatentAction(const FEnhancedLatentActionContextHandle& Handle, TArgs&&... Args)
 		: Super(Handle, Forward<TArgs>(Args)...)
 	{
-		Callback = Handle.CallInfo.Delegate;
-		ensureAlways(Callback.IsBound());
+		checkf(Handle.CallInfo.Delegate.IsBound(), TEXT("TEnhancedRepeatableLatentAction requires metadata LatentTrigger=Event on function"));
 	}
-
-	virtual ~TEnhancedRepeatableLatentAction() = default;
-
-	virtual void NotifyActionTriggered() override
-	{
-		// There is no need to "Switch" to context as it is handled differently by node
-		// Each trigger will invoke a delegate instead.
-		// The "Then" pin of original latent task not connected to anything.
-		Callback.ExecuteIfBound(this->SavedContextHandle);
-	}
-
-	static UFunction* GetDelegateSignature()
-	{
-		UFunction* Function = FindObject<UFunction>(
-			FindPackage(nullptr, TEXT("/Script/EnhancedAsyncAction")), TEXT("EnhancedLatentActionDelegate__DelegateSignature")
-		);
-		check(Function != nullptr);
-		return Function;
-	}
-
-protected:
-	FLatentCallInfo::FDelegate Callback;
 };
-
-template <>
-inline FAsyncContextId FAsyncContextId::Make(const FLatentCallInfo& InResult)
-{
-	const uint32 Hash = ::PointerHash(InResult.OwningObject.Get(), ::HashCombine(InResult.UUID, InResult.CallID));
-#if WITH_CONTEXT_TYPE_TAG
-	return FAsyncContextId(Hash, FAsyncContextId::EContextType::CT_LatentAction);
-#else
-	return FAsyncContextId(Hash);
-#endif
-}
 
 #undef UE_API

@@ -18,8 +18,6 @@ namespace EAA::Switches
 	constexpr bool bVariadicGetSet = true;
 	// latents use only variadic args nodes for now
 	constexpr bool bEnableLatents = true;
-	// enables support gen for repeatable latent
-	constexpr bool bEnableRepeatableLatents = true;
 }
 
 namespace EAA::Internals
@@ -41,9 +39,9 @@ namespace EAA::Internals
 	// Example: HasLatentContext=HandleParameter
 	static const FName MD_HasLatentContext = TEXT("HasLatentContext");
 
-	// Marker to use enhanced repeatable latent node. TBD: Better naming?
-	// Example: RepeatableLatent
-	static const FName MD_RepeatableLatent = TEXT("RepeatableLatent");
+	// Switch defining which node generation path should be used
+	// Example: LatentTrigger=(Then or Event)
+	static const FName MD_LatentTrigger = TEXT("LatentTrigger");
 
 	UE_API bool IsValidContainerProperty(const UObject* Object, const FName& Property);
 

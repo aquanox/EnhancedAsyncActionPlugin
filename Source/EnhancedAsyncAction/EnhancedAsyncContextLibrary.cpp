@@ -81,13 +81,7 @@ FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateContextFo
 {
 	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
 
-	FLatentCallInfo::FDelegate NativeDelegate;
-	if (Delegate.IsBound())
-	{
-		NativeDelegate.BindUFunction(Delegate.GetUObject(), Delegate.GetFunctionName());
-	}
-
-	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(FLatentCallInfo { Owner, UUID, CallUUID, NativeDelegate });
+	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(FLatentCallInfo::Make(Owner, UUID, CallUUID, Delegate));
 	if (ValueOrError.HasError())
 	{
 		UE_LOG(LogEnhancedAction, Error, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
@@ -100,12 +94,7 @@ FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateEmptyHand
 {
 	UE_LOG(LogEnhancedAction, Verbose, TEXT("CreateEmptyHandleForLatent Owner=%s UUID=%d call=%d"), *GetNameSafe(Owner), UUID, CallUUID);
 
-	FLatentCallInfo::FDelegate NativeDelegate;
-	if (Delegate.IsBound())
-	{
-		NativeDelegate.BindUFunction(Delegate.GetUObject(), Delegate.GetFunctionName());
-	}
-	return FEnhancedLatentActionContextHandle(FLatentCallInfo { Owner, UUID, CallUUID, NativeDelegate });
+	return FEnhancedLatentActionContextHandle(FLatentCallInfo::Make(Owner, UUID, CallUUID, Delegate));
 }
 
 void UEnhancedAsyncContextLibrary::DestroyContextForLatent(const FEnhancedLatentActionContextHandle& Handle)

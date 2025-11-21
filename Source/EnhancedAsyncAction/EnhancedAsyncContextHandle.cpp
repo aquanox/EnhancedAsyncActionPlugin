@@ -25,5 +25,5 @@ const FAsyncContextId& FAsyncContextHandleBase::GetId() const
 
 bool FAsyncContextHandleBase::IsValid() const
 {
-	return ContextId && Owner.IsValid() && Data.IsValid();
+	return static_cast<bool>(ContextId) && Owner.IsValid() && Data.IsValid();
 }

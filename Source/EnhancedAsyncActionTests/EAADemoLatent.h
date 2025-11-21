@@ -27,7 +27,7 @@ public:
 		FLatentActionInfo LatentInfo
 	);
 
-	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Latent", meta=(Latent, RepeatableLatent, HasLatentContext="LatentContext", WorldContext="WorldContextObject", LatentInfo="LatentInfo", Duration="0.2", Keywords="sleep"))
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Latent", meta=(Latent, LatentTrigger=Event, HasLatentContext="LatentContext", WorldContext="WorldContextObject", LatentInfo="LatentInfo", Duration="0.2", Keywords="sleep"))
 	static void SuperDelayRepeatable(
 		const UObject* WorldContextObject, float Duration,
 		const FEnhancedLatentActionContextHandle& LatentContext,

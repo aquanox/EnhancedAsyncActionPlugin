@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "EnhancedLatentActionHandle.h"
 #include "K2Node_AddPinInterface.h"
 #include "K2Node_AsyncContextInterface.h"
 #include "K2Node_CallFunction.h"
@@ -39,7 +40,7 @@ public:
 	virtual void PostReconstructNode() override;
 
 	static bool GetContextPin(UK2Node_CallFunction* Node, UEdGraphPin*& InPin);
-	static bool IsEventMode(UK2Node_CallFunction* Node);
+	static FLatentCallInfo::ETriggerMode GetTriggerMode(UK2Node_CallFunction* Node);
 
 	using FInputPinInfo = UK2Node_EnhancedAsyncTaskBase::FInputPinInfo;
 	using FOutputPinInfo = UK2Node_EnhancedAsyncTaskBase::FOutputPinInfo;

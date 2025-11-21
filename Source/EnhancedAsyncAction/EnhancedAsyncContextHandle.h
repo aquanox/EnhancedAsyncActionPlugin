@@ -124,7 +124,7 @@ struct TStructOpsTypeTraits<FAsyncContextHandleBase>
 {
 	enum
 	{
-		// WithCopy = true,
+		WithCopy = true,
 	};
 };
 

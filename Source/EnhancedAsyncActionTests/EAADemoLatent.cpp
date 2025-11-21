@@ -71,6 +71,7 @@ void UEAADemoLatent::SuperDelay(
 	return;
 }
 
+// TBD: actually here it can be a copy, since there is no need to capture mutable reference to context
 void UEAADemoLatent::SuperDelayRepeatable(
 	const UObject* WorldContextObject, float Duration,
 	const FEnhancedLatentActionContextHandle& LatentContext,
