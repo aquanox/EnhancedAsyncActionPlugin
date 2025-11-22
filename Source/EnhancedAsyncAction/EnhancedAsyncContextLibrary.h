@@ -83,6 +83,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core")
 	static UE_API FEnhancedAsyncActionContextHandle GetContextForObject(const UObject* Action);
+	/**
+	 * Acquire capture context handle for latent action. Called by UK2Node_EnhancedCallLatent or Tests.
+	 *
+	 * @return Context handle
+	 */
+	UFUNCTION(BlueprintCallable, Category="EnhancedAsyncAction|Core")
+	static UE_API FEnhancedLatentActionContextHandle GetContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID);
 
 	/**
 	 * Dump context information to log for debugging purposes

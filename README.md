@@ -189,7 +189,7 @@ Context created only if there is at least one capture pin connected.
 ## TODOS
 
 - Write some tests
-- Clean up debug logging
+- Clean up debug logging and code
 - Improve handling of malformed or changed nodes (there are lots of asserts for debug purposes right now)
 - Maps support (has to wait for UE 5.8)
 

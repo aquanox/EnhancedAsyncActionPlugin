@@ -71,7 +71,7 @@ FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::CreateContextFor
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(Action, InDataProperty);
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Error, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Warning, TEXT("CreateContextForObject failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedAsyncActionContextHandle();
 	}
 	return ValueOrError.GetValue();
@@ -90,7 +90,7 @@ FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::CreateContextFo
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().CreateContext(CallInfo);
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Error, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Warning, TEXT("CreateContextForLatent failed for node: %s"), *ValueOrError.GetError());
 		return FEnhancedLatentActionContextHandle();
 	}
 	return ValueOrError.GetValue();
@@ -102,29 +102,26 @@ void UEnhancedAsyncContextLibrary::DestroyContextForLatent(const FEnhancedLatent
 	auto ValueOrError = FEnhancedAsyncContextManager::Get().DestroyContext(Handle.GetId());
 	if (ValueOrError.HasError())
 	{
-		UE_LOG(LogEnhancedAction, Verbose, TEXT("DestroyContextForLatent failed for node: %s"), *ValueOrError.GetError());
+		UE_LOG(LogEnhancedAction, Warning, TEXT("DestroyContextForLatent failed for node: %s"), *ValueOrError.GetError());
 	}
 }
 
 void UEnhancedAsyncContextLibrary::SetupContextContainer(const FAsyncContextHandleBase& Handle, const FString& Config)
 {
-	if (!Handle.IsValid())
-	{
-		FFrame::KismetExecutionMessage(TEXT("SetupContextContainer failed for node"), ELogVerbosity::Error, TEXT("EAA_SetupContextContainer"));
-		return;
-	}
-
 	ResolveContext(Handle)->SetupFromStringDefinition(Config);
 }
 
 FEnhancedAsyncActionContextHandle UEnhancedAsyncContextLibrary::GetContextForObject(const UObject* Action)
 {
-	auto Context = FEnhancedAsyncContextManager::Get().FindContextHandle(Action);
-	if (!Context.IsValid())
-	{
-		FFrame::KismetExecutionMessage(TEXT("GetContextForObject failed for node"), ELogVerbosity::Error, TEXT("EAA_GetCaptureContext"));
-	}
-	return Context;
+	auto Handle = FEnhancedAsyncContextManager::Get().FindContextHandle(Action);
+	return Handle;
+}
+
+FEnhancedLatentActionContextHandle UEnhancedAsyncContextLibrary::GetContextForLatent(const UObject* Owner, int32 UUID, int32 CallUUID)
+{
+	const FLatentCallInfo CallInfo = FLatentCallInfo::Make(Owner, UUID, CallUUID);
+	FEnhancedLatentActionContextHandle Handle = FEnhancedAsyncContextManager::Get().FindContextHandle(CallInfo);
+	return Handle;
 }
 
 void UEnhancedAsyncContextLibrary::DumpContextForObject(const UObject* Action)

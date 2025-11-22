@@ -74,7 +74,7 @@ struct FLatentCallInfo
      * @return
      */
     template<typename TDelegate = class FEnhancedLatentActionDelegate>
-	static FLatentCallInfo Make(const UObject* Owner, int32 UUID, int32 CallUUID, TDelegate Delegate)
+	static FLatentCallInfo Make(const UObject* Owner, int32 UUID, int32 CallUUID, TDelegate Delegate = TDelegate())
 	{
 		FLatentCallInfo Info;
 		Info.OwningObject = Owner;
