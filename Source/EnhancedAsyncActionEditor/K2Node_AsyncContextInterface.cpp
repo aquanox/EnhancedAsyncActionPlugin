@@ -9,6 +9,8 @@
 #include "ScopedTransaction.h"
 #include "ToolMenu.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(K2Node_AsyncContextInterface)
+
 #define LOCTEXT_NAMESPACE "FEnhancedAsyncTaskCapture"
 
 FEnhancedAsyncTaskCapture::FEnhancedAsyncTaskCapture(int32 InIndex, UEdGraphPin* Input, UEdGraphPin* Output)

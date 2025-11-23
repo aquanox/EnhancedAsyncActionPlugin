@@ -3,6 +3,8 @@
 #include "EnhancedAsyncContextHandle.h"
 #include "EnhancedAsyncContextManager.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(EnhancedAsyncContextHandle)
+
 FAsyncContextHandleBase::FAsyncContextHandleBase(const FAsyncContextId& Id)
 	: ContextId(Id)
 {

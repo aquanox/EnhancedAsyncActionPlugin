@@ -18,6 +18,8 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "KismetCompiler.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(K2Node_EnhancedCallLatentFunction)
+
 #define LOCTEXT_NAMESPACE "UK2Node_EnhancedCallLatentFunction"
 
 void UK2Node_EnhancedCallLatentFunction::GetMenuActions(FBlueprintActionDatabaseRegistrar& ActionRegistrar) const

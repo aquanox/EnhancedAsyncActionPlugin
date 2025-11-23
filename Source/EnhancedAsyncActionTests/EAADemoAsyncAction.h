@@ -19,11 +19,11 @@ struct FEAACaptureContext
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(BlueprintReadWrite, Category=Test)
 	FString ParamA;
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(BlueprintReadWrite, Category=Test)
 	int32 ParamB = 0;
-	UPROPERTY(BlueprintReadWrite)
+	UPROPERTY(BlueprintReadWrite, Category=Test)
 	TObjectPtr<UObject> ParamC;
 };
 

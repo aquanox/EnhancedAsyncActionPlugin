@@ -105,9 +105,11 @@ public:
 
 	// ========== CASTS =============
 
+	/** cast FEnhancedAsyncActionContextHandle to FAsyncContextHandleBase */
 	UFUNCTION(BlueprintPure, Category="EnhancedAsyncAction|Casts", meta=(CompactNodeTitle = "->", BlueprintAutocast, BlueprintInternalUseOnly=true))
 	static UE_API struct FAsyncContextHandleBase GetHandleFromLatentHandle(const FEnhancedAsyncActionContextHandle& Handle);
 
+	/** cast FEnhancedLatentActionContextHandle to FAsyncContextHandleBase */
 	UFUNCTION(BlueprintPure, Category="EnhancedAsyncAction|Casts", meta=(CompactNodeTitle = "->", BlueprintAutocast, BlueprintInternalUseOnly=true))
 	static UE_API struct FAsyncContextHandleBase GetHandleFromActionHandle(const FEnhancedLatentActionContextHandle& Handle);
 

@@ -15,6 +15,8 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/AssertionMacros.h"
 
+#include UE_INLINE_GENERATED_CPP_BY_NAME(EAAContextLibraryTests)
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FEAALibraryTestCreateAsync,
 	"EnhancedAsyncAction.Context.CreateAsync",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter | EAutomationTestFlags::HighPriority);

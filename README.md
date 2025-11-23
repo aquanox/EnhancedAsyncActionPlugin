@@ -7,8 +7,6 @@
 
 > [!NOTE]
 > This plugin is Experimental, while being functionally complete there is room for usability improvements and new features.
-> 
-> Not ready yet for any production use!
 
 This plugin is a proof-of-concept experiment to make blueprint async nodes "capture" state of variables prior to call in a friendly way.
 
@@ -132,6 +130,7 @@ With no limits to amount of data to capture
 
 **Custom Async Action Flow**
 
+Normal mode:
 - Call `ProxyFactory::ProxyFactoryFunction` to create new `ProxyClass` instance
 - Call `CreateContextForObject` to create bound context for the proxy object
 - Call `SetupContext` to configure context property bag (only for non-vararg mode)
@@ -151,8 +150,7 @@ With no limits to amount of data to capture
     - Assign value to a created local variable
     - Continue Execution from Event Pin
 
-**Variadic Async Action Flow**
-
+Variadic mode:
 - Call `ProxyFactory::ProxyFactoryFunction` to create new `ProxyClass` instance
 - Call `CreateContextForObject` to create bound context for the proxy object
 - Call `SetValueVariadic` to write captures values to storage (pin per captured property)
@@ -169,8 +167,9 @@ With no limits to amount of data to capture
     - Assign value to a created local variable
     - Continue Execution from Event Pin
 
-**Standard Latent Action Flow**
+**Custom Latent Action Flow**
 
+Normal mode:
 - Call `CreateContextForLatent` to create new context
 - Call `SetupContext` to configure context property bag (only for non-vararg mode)
 - Create local variable for context handle that will be updated by latent action
@@ -178,6 +177,22 @@ With no limits to amount of data to capture
   - Call `SetValueVariadic` to write captures values to storage (pin per captured property)
   - Call `SetValue[Type]` to write captures values to storage (one call per captured property)
 - Call latent action function
+- Read Properties one of:
+  - Call `GetValueVariadic` to read captures values from storage (pin per captured property)
+  - Call `GetValue[Type]` to read captures values from storage (one call per captured property)
+- Call `DestroyContext` to free used resources
+- Continue Execution
+
+Event mode:
+- Create a Custom Event node
+- Call `CreateContextForLatent` to create new context providing data about event
+- Call `SetupContext` to configure context property bag (only for non-vararg mode)
+- Create local variable for context handle that will be updated by latent action
+- Write Properties one of:
+  - Call `SetValueVariadic` to write captures values to storage (pin per captured property)
+  - Call `SetValue[Type]` to write captures values to storage (one call per captured property)
+- Call latent action function
+- From Custom Event node:
 - Read Properties one of:
   - Call `GetValueVariadic` to read captures values from storage (pin per captured property)
   - Call `GetValue[Type]` to read captures values from storage (one call per captured property)
