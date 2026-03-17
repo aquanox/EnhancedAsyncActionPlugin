@@ -93,6 +93,10 @@ bool EAA::Internals::IsCapturableType(const FEdGraphPinType& Type)
 
 FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const UEdGraphPin* Pin)
 {
+	if (!Pin)
+	{
+		return FPropertyTypeInfo::Invalid;
+	}
 	return IdentifyPropertyTypeForPin(Pin->PinType);
 }
 
@@ -100,14 +104,13 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 {
 	FPropertyTypeInfo TypeInfo;
 
-	const FName& PinCategory = Type.PinCategory;
-
-	if (PinCategory == UEdGraphSchema_K2::PC_Wildcard)
+	if (Type.PinCategory == UEdGraphSchema_K2::PC_Wildcard)
 		return FPropertyTypeInfo::Wildcard;
-	if (PinCategory == UEdGraphSchema_K2::PC_Exec
-		|| PinCategory == UEdGraphSchema_K2::PC_Delegate
-		|| PinCategory == UEdGraphSchema_K2::PC_MCDelegate
-		|| PinCategory == UEdGraphSchema_K2::PC_Interface)
+
+	if (Type.PinCategory == UEdGraphSchema_K2::PC_Exec
+		|| Type.PinCategory == UEdGraphSchema_K2::PC_Delegate
+		|| Type.PinCategory == UEdGraphSchema_K2::PC_MCDelegate
+		|| Type.PinCategory == UEdGraphSchema_K2::PC_Interface)
 		return FPropertyTypeInfo::Invalid;
 
 	const EPinContainerType ContainerType = Type.ContainerType;
@@ -132,9 +135,9 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 		return FPropertyTypeInfo::Invalid;
 	}
 
-	auto GuessType = [](const FEdGraphPinType& InPinType, EPropertyBagPropertyType& OutType, TObjectPtr<const UObject>& OutTypeObject)
+	auto GuessType = [](const FName& PinCategory, const FName& PinSubCategory,  TWeakObjectPtr<UObject> PinSubCategoryObject,
+		EPropertyBagPropertyType& OutType, TObjectPtr<const UObject>& OutTypeObject)
 	{
-		const FName& PinCategory = InPinType.PinCategory;
 		if (PinCategory == UEdGraphSchema_K2::PC_Boolean)
 		{
 			OutType = EPropertyBagPropertyType::Bool;
@@ -142,7 +145,7 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 		}
 		else if (PinCategory == UEdGraphSchema_K2::PC_Byte)
 		{
-			if (UEnum* Enum = Cast<UEnum>(InPinType.PinSubCategoryObject))
+			if (UEnum* Enum = Cast<UEnum>(PinSubCategoryObject))
 			{
 				OutType = EPropertyBagPropertyType::Enum;
 				OutTypeObject = Enum;
@@ -175,12 +178,12 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 		}
 		else if (PinCategory == UEdGraphSchema_K2::PC_Real)
 		{
-			if (InPinType.PinSubCategory == UEdGraphSchema_K2::PC_Float)
+			if (PinSubCategory == UEdGraphSchema_K2::PC_Float)
 			{
 				OutType = EPropertyBagPropertyType::Float;
 				OutTypeObject = nullptr;
 			}
-			if (InPinType.PinSubCategory == UEdGraphSchema_K2::PC_Double)
+			if (PinSubCategory == UEdGraphSchema_K2::PC_Double)
 			{
 				OutType = EPropertyBagPropertyType::Double;
 				OutTypeObject = nullptr;
@@ -204,47 +207,50 @@ FPropertyTypeInfo EAA::Internals::IdentifyPropertyTypeForPin(const FEdGraphPinTy
 		else if (PinCategory == UEdGraphSchema_K2::PC_Enum)
 		{
 			OutType = EPropertyBagPropertyType::Enum;
-			OutTypeObject = InPinType.PinSubCategoryObject.Get();
+			OutTypeObject = PinSubCategoryObject.Get();
 		}
 		else if (PinCategory == UEdGraphSchema_K2::PC_Struct)
 		{
 			OutType = EPropertyBagPropertyType::Struct;
-			OutTypeObject = InPinType.PinSubCategoryObject.Get();
+			OutTypeObject = PinSubCategoryObject.Get();
 		}
 		else if (PinCategory == UEdGraphSchema_K2::PC_Object)
 		{
 			OutType = EPropertyBagPropertyType::Object;
-			OutTypeObject = InPinType.PinSubCategoryObject.Get();
+			OutTypeObject = PinSubCategoryObject.Get();
 		}
 		else if (PinCategory == UEdGraphSchema_K2::PC_SoftObject)
 		{
 			OutType = EPropertyBagPropertyType::SoftObject;
-			OutTypeObject = InPinType.PinSubCategoryObject.Get();
+			OutTypeObject = PinSubCategoryObject.Get();
 		}
 		else if (PinCategory == UEdGraphSchema_K2::PC_Class)
 		{
 			OutType = EPropertyBagPropertyType::Class;
-			OutTypeObject = InPinType.PinSubCategoryObject.Get();
+			OutTypeObject = PinSubCategoryObject.Get();
 		}
 		else if (PinCategory == UEdGraphSchema_K2::PC_SoftClass)
 		{
 			OutType = EPropertyBagPropertyType::SoftClass;
-			OutTypeObject = InPinType.PinSubCategoryObject.Get();
+			OutTypeObject = PinSubCategoryObject.Get();
 		}
 		else
 		{
-			ensureMsgf(false, TEXT("Unhandled pin category %s"), *InPinType.PinCategory.ToString());
+			ensureMsgf(false, TEXT("Unhandled pin category %s"), *PinCategory.ToString());
 		}
 	};
 
 	if (ContainerType != EPinContainerType::Map)
 	{
-		GuessType(Type, TypeInfo.ValueType, TypeInfo.ValueTypeObject);
+		GuessType(Type.PinCategory, Type.PinSubCategory, Type.PinSubCategoryObject, TypeInfo.ValueType, TypeInfo.ValueTypeObject);
 	}
 	else
 	{
-		// todo: maps
-		ensureAlways(false);
+		check(Type.IsMap());
+		GuessType(Type.PinCategory, Type.PinSubCategory, Type.PinSubCategoryObject,
+			TypeInfo.KeyType, TypeInfo.KeyTypeObject);
+		GuessType(Type.PinValueType.TerminalCategory, Type.PinValueType.TerminalSubCategory, Type.PinValueType.TerminalSubCategoryObject,
+			TypeInfo.ValueType, TypeInfo.ValueTypeObject);
 	}
 
 	return TypeInfo;

@@ -148,7 +148,7 @@ bool IK2Node_AsyncContextInterface::TestConnectPins(const UEdGraphPin* MyPin, co
 		{
 			if (!EAA::Internals::IsCapturableType(OtherPin->PinType))
 			{
-				OutReason = FString::Printf(TEXT("Can not capture pin of type %s"), *OtherPin->PinType.PinCategory.ToString());
+				OutReason = FString::Printf(TEXT("Can not capture pin of type %s"), *EAA::Internals::IdentifyPropertyTypeForPin(OtherPin).ToString());
 				return false;
 			}
 		}

@@ -50,6 +50,7 @@ struct UE_API FPropertyTypeInfo
 	bool IsWildcard() const;
 	bool IsValid() const;
 	bool IsSupported() const;
+	FString ToString() const;
 
 	bool IsCompatibleWith(const FPropertyTypeInfo& Other) const;
 

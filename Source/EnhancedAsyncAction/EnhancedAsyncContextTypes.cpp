@@ -1,6 +1,7 @@
 ﻿// Copyright 2025, Aquanox.
 
 #include "EnhancedAsyncContextTypes.h"
+#include "EnhancedAsyncContextShared.h"
 #include "StructUtils/PropertyBag.h"
 #include "StructUtils/StructUtilsTypes.h"
 #include "UObject/TextProperty.h"
@@ -26,6 +27,36 @@ bool FPropertyTypeInfo::IsValid() const
 bool FPropertyTypeInfo::IsSupported() const
 {
 	return IsValid() && EAA::Internals::HasAccessorForType(*this);
+}
+
+FString FPropertyTypeInfo::ToString() const
+{
+	if (!IsValid())
+		return TEXT("Invalid");
+	if (IsWildcard())
+		return TEXT("Wildcard");
+
+	auto ObjectToString = [](const TObjectPtr<const UObject>& Ptr) -> FString
+	{
+		if (EAA::Switches::bDebugTooltips)
+			return ::IsValid(Ptr) ? TEXT("=") + Ptr->GetPathName() : TEXT("");
+		return TEXT("");
+	};
+
+	switch (ContainerType)
+	{
+	case EPropertyBagContainerType::None:
+		return FString::Printf(TEXT("%s%s"), *UEnum::GetValueAsString(ValueType), *ObjectToString(ValueTypeObject));
+	case EPropertyBagContainerType::Array:
+		return FString::Printf(TEXT("Array[%s%s]"), *UEnum::GetValueAsString(ValueType), *ObjectToString(ValueTypeObject));
+	case EPropertyBagContainerType::Set:
+		return FString::Printf(TEXT("Set[%s%s]"), *UEnum::GetValueAsString(ValueType), *ObjectToString(ValueTypeObject));
+	//case EPropertyBagContainerType::Map:
+	//	ContainerFmt = TEXT("Map[%s%s => %s%s]");
+	//	break;
+	}
+
+	return TEXT("Unsupported");
 }
 
 bool FPropertyTypeInfo::IsCompatibleWith(const FPropertyTypeInfo& Other) const
